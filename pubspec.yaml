@@ -1,0 +1,51 @@
+name: flashallinone
+description: "Flash All In One - 一站式 Android 刷机与设备管理工具箱"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.2
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.3
+  cupertino_icons: ^1.0.8
+  window_manager: ^0.4.3
+  file_picker: ^8.1.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/data/
+    - assets/tools/windows/
+    - assets/tools/windows/scrcpy/
+    - assets/tools/windows/mtk/
+    - assets/tools/windows/img/
+    - assets/tools/windows/mi8g3/
+    - assets/tools/windows/qdl/
+    - assets/tools/windows/f2fs/
+    - assets/tools/windows/payload/
+    - assets/tools/windows/sprd/
+    - assets/tools/windows/samloader/
+    - assets/tools/windows/uad/
+    - assets/tools/linux/
+    - assets/tools/linux/qdl/
+    - assets/tools/linux/uad/
+    - assets/tools/linux/samloader/
+    - assets/tools/apk/
+    - assets/tools/kernelsu/
+    - assets/tools/ghostlock/
+    - assets/tools/ghostlock/profiles/
+    - assets/tools/QSaharaServer.exe
+    - assets/tools/fh_loader.exe
+    - assets/tools/devcon.exe
