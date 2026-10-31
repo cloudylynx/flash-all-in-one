@@ -16,6 +16,7 @@ import 'pages/edl_page.dart';
 import 'pages/fastboot_page.dart';
 import 'pages/files_page.dart';
 import 'pages/install_page.dart';
+import 'pages/ios_page.dart';
 import 'pages/logcat_page.dart';
 import 'pages/mtk_page.dart';
 import 'pages/ota_page.dart';
@@ -28,6 +29,7 @@ import 'pages/root_page.dart';
 import 'pages/scripts_page.dart';
 import 'pages/device_screen_page.dart';
 import 'pages/sbc_page.dart';
+import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/shell_page.dart';
 import 'pages/vendor_page.dart';
@@ -179,6 +181,10 @@ class _MainShellState extends State<MainShell> {
         return const SbcPage();
       case 'wearable':
         return const WearablePage();
+      case 'serial':
+        return const SerialPage();
+      case 'ios':
+        return const IosPage();
       case 'files':
         return const FilesPage();
       case 'fastboot':

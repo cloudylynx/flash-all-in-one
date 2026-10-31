@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../services/jtag_service.dart';
 import '../../services/wearable_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -25,6 +26,10 @@ class _WearablePageState extends State<WearablePage> {
   String? _arduinoVer;
   String? _picoVer;
   String? _stlinkVer;
+  String? _nrfutilVer;
+  String? _jtagVer;
+  String _jtagProbe = 'interface/stlink.cfg';
+  String _jtagChip = 'target/stm32f4x.cfg';
 
   // ESP
   final _portController = TextEditingController(text: '/dev/ttyUSB0');
@@ -58,6 +63,8 @@ class _WearablePageState extends State<WearablePage> {
     final av = await WearableService.instance.arduinoVersion();
     final pv = await WearableService.instance.picotoolVersion();
     final sv = await WearableService.instance.stlinkVersion();
+    final nv = await WearableService.instance.nrfutilVersion();
+    final jv = await JtagService.instance.version();
     if (!mounted) return;
     setState(() {
       _ready = ok;
@@ -65,6 +72,8 @@ class _WearablePageState extends State<WearablePage> {
       _arduinoVer = av;
       _picoVer = pv;
       _stlinkVer = sv;
+      _nrfutilVer = nv;
+      _jtagVer = jv;
     });
   }
 
@@ -108,6 +117,8 @@ class _WearablePageState extends State<WearablePage> {
                       ('esp', 'ESP32', 'esptool'),
                       ('pico', 'Pico', 'picotool'),
                       ('stm32', 'STM32', 'stlink'),
+                      ('nrf', 'nRF52', 'nrfutil'),
+                      ('jtag', 'JTAG', 'openocd'),
                       ('rpi', '树莓派', 'rpiboot'),
                       ('arduino', 'Arduino', 'arduino-cli'),
                       ('astro', '小米穿戴', 'AstroBox'),
@@ -162,7 +173,9 @@ class _WearablePageState extends State<WearablePage> {
                           ? _buildPico()
                           : _platform == 'stm32'
                               ? _buildStm32()
-                              : _platform == 'rpi'
+                              : _platform == 'nrf'
+                                  ? _buildNrf()
+                                  : _platform == 'rpi'
                                   ? _buildRpi()
                                   : _platform == 'arduino'
                                       ? _buildArduino()
@@ -842,6 +855,460 @@ class _WearablePageState extends State<WearablePage> {
                 foregroundColor: AppTheme.danger,
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _buildNrf() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (_nrfutilVer != null ? AppTheme.success : AppTheme.danger)
+                .withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(_nrfutilVer != null ? Icons.check_circle : Icons.error,
+                  size: 15,
+                  color: _nrfutilVer != null
+                      ? AppTheme.success
+                      : AppTheme.danger),
+              const SizedBox(width: 8),
+              Text(
+                _nrfutilVer != null
+                    ? 'nrfutil $_nrfutilVer'
+                    : 'nrfutil 未就绪',
+                style: const TextStyle(
+                    fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Nordic nRF52 系列',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary)),
+              SizedBox(height: 8),
+              Text(
+                'nRF52832 / nRF52840 / nRF52810 等\n\n'
+                'DFU 刷写需要 .zip 格式的 DFU 包，\n'
+                '不是裸 .hex 或 .bin。\n\n'
+                '进入 DFU 模式：按住复位键或特定按键组合',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppTheme.textSecondary,
+                    height: 1.7),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: 'DFU 刷写',
+          trailing: OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () async {
+                    final r = await FilePicker.platform.pickFiles(
+                      dialogTitle: '选择 DFU 包（.zip）',
+                      type: FileType.any,
+                    );
+                    if (r != null && r.files.single.path != null) {
+                      setState(() => _firmwarePath = r.files.single.path);
+                    }
+                  },
+            style: OutlinedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+            child: const Text('选择', style: TextStyle(fontSize: 11.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _firmwarePath?.split(Platform.pathSeparator).last ??
+                    '未选择 DFU 包',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: _firmwarePath != null
+                      ? AppTheme.textPrimary
+                      : AppTheme.textMuted,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 50,
+                    child: Text('串口',
+                        style: TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary)),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _portController,
+                      decoration: const InputDecoration(
+                        hintText: '/dev/ttyACM0 或 COM3',
+                        isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      style: const TextStyle(
+                          fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 38,
+                child: ElevatedButton.icon(
+                  onPressed: (_busy || _firmwarePath == null)
+                      ? null
+                      : () => _run(() async {
+                            final ok = await _confirm('nRF52 DFU 刷写',
+                                '将把 ${_firmwarePath!.split(Platform.pathSeparator).last} 刷入设备。\n\n确保设备已进入 DFU 模式。');
+                            if (ok != true) {
+                              return WearableResult(false, '已取消', []);
+                            }
+                            return WearableService.instance.nrfFlash(
+                              packagePath: _firmwarePath!,
+                              port: _portController.text.trim(),
+                              confirmed: true,
+                              onLine: _addLog,
+                            );
+                          }),
+                  icon: const Icon(Icons.flash_on, size: 16),
+                  label: const Text('DFU 刷写',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: '工具',
+          child: _action(Icons.vpn_key, '生成 DFU 密钥', 'keys generate',
+              () => _run(() => WearableService.instance.nrfGenerateKeys(
+                  privateKeyPath: '/tmp/dfu-private.pem',
+                  onLine: _addLog))),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.warning.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: AppTheme.warning.withValues(alpha: 0.25)),
+          ),
+          child: const Text(
+            '⚠️ 注意：\n'
+            '  · 需要 .zip 格式 DFU 包，不是裸 .hex\n'
+            '  · 部分设备需要先刷 SoftDevice\n'
+            '  · 密钥丢失后无法再签固件',
+            style: TextStyle(
+                fontSize: 11, color: AppTheme.textSecondary, height: 1.7),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _buildJtag() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (_jtagVer != null ? AppTheme.success : AppTheme.danger)
+                .withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(_jtagVer != null ? Icons.check_circle : Icons.error,
+                  size: 15,
+                  color:
+                      _jtagVer != null ? AppTheme.success : AppTheme.danger),
+              const SizedBox(width: 8),
+              Text(
+                _jtagVer != null
+                    ? 'openocd $_jtagVer'
+                    : 'openocd 未就绪',
+                style: const TextStyle(
+                    fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.danger.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: AppTheme.danger.withValues(alpha: 0.25)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.warning_amber, size: 14, color: AppTheme.danger),
+                  SizedBox(width: 6),
+                  Text('JTAG / SWD 调试',
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.danger)),
+                ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                '这是「最后的救砖手段」——\n'
+                '当设备连 EDL / BROM 都进不去时，\n'
+                '只能焊线接 JTAG。\n\n'
+                '需要硬件：ST-Link / J-Link / CMSIS-DAP\n'
+                '需要拆机 + 焊接',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppTheme.textSecondary,
+                    height: 1.7),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 配置
+        AppCard(
+          title: '配置',
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 60,
+                    child: Text('调试器',
+                        style: TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary)),
+                  ),
+                  Expanded(
+                    child: DropdownButton<String>(
+                      value: _jtagProbe,
+                      isDense: true,
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppTheme.textPrimary),
+                      items: [
+                        for (final pr in JtagService.probes)
+                          DropdownMenuItem(
+                            value: pr['cfg'],
+                            child: Text(pr['name']!),
+                          ),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(
+                              () => _jtagProbe = v ?? 'interface/stlink.cfg'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 60,
+                    child: Text('芯片',
+                        style: TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary)),
+                  ),
+                  Expanded(
+                    child: DropdownButton<String>(
+                      value: _jtagChip,
+                      isDense: true,
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppTheme.textPrimary),
+                      items: [
+                        for (final ch in JtagService.chips)
+                          DropdownMenuItem(
+                            value: ch['cfg'],
+                            child: Text(ch['name']!),
+                          ),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(
+                              () => _jtagChip = v ?? 'target/stm32f4x.cfg'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 操作
+        AppCard(
+          title: '操作',
+          child: Column(
+            children: [
+              _action(Icons.usb, '扫描调试器', '检测已连接的调试器',
+                  () => _run(() async {
+                        final r = await JtagService.instance
+                            .scanProbes(onLine: _addLog);
+                        return WearableResult(r.ok, r.message, r.log);
+                      })),
+              const Divider(height: 16),
+              _action(Icons.link, '测试连接', 'init + targets',
+                  () => _run(() async {
+                        final r = await JtagService.instance.testConnection(
+                          probeCfg: _jtagProbe,
+                          chipCfg: _jtagChip,
+                          onLine: _addLog,
+                        );
+                        return WearableResult(r.ok, r.message, r.log);
+                      })),
+              const Divider(height: 16),
+              _action(Icons.memory, '读芯片 ID', 'flash probe',
+                  () => _run(() async {
+                        final r = await JtagService.instance.readChipId(
+                          probeCfg: _jtagProbe,
+                          chipCfg: _jtagChip,
+                          onLine: _addLog,
+                        );
+                        return WearableResult(r.ok, r.message, r.log);
+                      })),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 烧写
+        AppCard(
+          title: '烧写固件',
+          trailing: OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () async {
+                    final r = await FilePicker.platform.pickFiles(
+                      dialogTitle: '选择固件（.bin / .hex / .elf）',
+                      type: FileType.any,
+                    );
+                    if (r != null && r.files.single.path != null) {
+                      setState(() => _firmwarePath = r.files.single.path);
+                    }
+                  },
+            style: OutlinedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+            child: const Text('选择', style: TextStyle(fontSize: 11.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _firmwarePath?.split(Platform.pathSeparator).last ??
+                    '未选择固件',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: _firmwarePath != null
+                      ? AppTheme.textPrimary
+                      : AppTheme.textMuted,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (_firmwarePath != null) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(() async {
+                              final ok = await _confirm('JTAG 烧写',
+                                  '将把 ${_firmwarePath!.split(Platform.pathSeparator).last} 通过 JTAG 烧入。\n\n烧写错误会导致设备无法启动。');
+                              if (ok != true) {
+                                return WearableResult(false, '已取消', []);
+                              }
+                              final r =
+                                  await JtagService.instance.flashFirmware(
+                                probeCfg: _jtagProbe,
+                                chipCfg: _jtagChip,
+                                firmwarePath: _firmwarePath!,
+                                confirmed: true,
+                                onLine: _addLog,
+                              );
+                              return WearableResult(r.ok, r.message, r.log);
+                            }),
+                    icon: const Icon(Icons.flash_on, size: 16),
+                    label: const Text('烧写',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.warning.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: AppTheme.warning.withValues(alpha: 0.25)),
+          ),
+          child: const Text(
+            '⚠️ JTAG 接线（SWD 四线）：\n'
+            '  · SWDIO → 调试器 SWDIO\n'
+            '  · SWCLK → 调试器 SWCLK\n'
+            '  · GND   → GND\n'
+            '  · 3.3V  → 3.3V（或设备自供电）\n\n'
+            '部分芯片需要额外接 RESET',
+            style: TextStyle(
+                fontSize: 11, color: AppTheme.textSecondary, height: 1.7),
           ),
         ),
       ],

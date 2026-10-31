@@ -173,6 +173,16 @@ class SideNav extends StatefulWidget {
   /// 智能穿戴 / 开发板 + 设置（不在危险框内）
   static const List<NavItem> extraItems = [
     NavItem(
+        id: 'ios',
+        label: 'iOS 设备管理',
+        icon: Icons.phone_iphone,
+        group: '穿戴'),
+    NavItem(
+        id: 'serial',
+        label: 'TTL / 串口',
+        icon: Icons.cable,
+        group: '穿戴'),
+    NavItem(
         id: 'wearable',
         label: '智能穿戴/开发板',
         icon: Icons.watch,
@@ -352,7 +362,7 @@ class _SideNavState extends State<SideNav> {
                 ),
                   // ═══ 智能穿戴 / 开发板 + 设置（不在危险框内）═══
                   const SizedBox(height: 10),
-                  _groupHeader('智能穿戴 / 开发板'),
+                  _groupHeader('调试 / 开发板'),
                   for (final item
                       in SideNav.extraItems.where(_matches))
                     _NavTile(

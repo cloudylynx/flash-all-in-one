@@ -74,6 +74,14 @@ class WearableService {
       );
     }
 
+    // nrfutil（nRF52）
+    await ToolExtractor.extractFile(
+      assetPath: 'assets/tools/$plat/nrf/nrfutil${Platform.isWindows ? ".exe" : ""}',
+      subDir: 'wearable',
+      fileName: 'nrfutil${Platform.isWindows ? ".exe" : ""}',
+      executable: true,
+    );
+
     // stlink（STM32）
     final stSuffix = Platform.isWindows ? '.exe' : '';
     for (final name in ['st-flash', 'st-info', 'st-util']) {
@@ -1009,6 +1017,164 @@ class WearableService {
       return WearableResult(true, 'Flash 已擦除', log);
     }
     return WearableResult(false, '擦除失败', log);
+  }
+
+
+  // ═══════════════════════════════════════════════
+  // nRF52（nrfutil）
+  // ═══════════════════════════════════════════════
+
+  /// nrfutil 版本
+  Future<String?> nrfutilVersion() async {
+    if (!await init()) return null;
+    final exe = _exe('nrfutil');
+    if (exe == null) return null;
+    final r = await ProcessRunner.run(exe, ['version'],
+        timeout: AppConfig.shortTimeout, workingDirectory: _dir);
+    final m = RegExp(r'([\d.]+)').firstMatch(r.output);
+    return m?.group(1);
+  }
+
+  /// nRF52 DFU 刷写（通过串口）
+  ///
+  /// 需要一个 DFU 包（.zip），通常由 nrfutil pkg generate 生成，
+  /// 或者从 Nordic 官方 / 第三方固件仓库下载。
+  Future<WearableResult> nrfFlash({
+    required String packagePath,
+    required String port,
+    int baud = 115200,
+    bool confirmed = false,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!confirmed) {
+      return WearableResult(false, '需要确认（confirmed=false）', log);
+    }
+
+    if (!await init()) return WearableResult(false, 'nrfutil 未就绪', log);
+    final exe = _exe('nrfutil');
+    if (exe == null) return WearableResult(false, 'nrfutil 未找到', log);
+
+    if (!File(packagePath).existsSync()) {
+      return WearableResult(false, 'DFU 包不存在', log);
+    }
+
+    add('══ nRF52 DFU 刷写');
+    add('  包: ${p.basename(packagePath)}');
+    add('  大小: ${(File(packagePath).lengthSync() / 1024).toStringAsFixed(1)} KB');
+    add('  串口: $port @ $baud');
+    add('');
+    add('ℹ️ 设备需要进入 DFU 模式：');
+    add('  · 通常按住复位键或特定按键组合');
+    add('  · 或者用 nrfjprog 触发');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['dfu', 'serial', '-pkg', packagePath, '-p', port, '-b', '$baud'],
+      onLine: add,
+      timeout: const Duration(minutes: 10),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ DFU 刷写完成');
+      return WearableResult(true, '固件已刷入', log);
+    }
+    return WearableResult(false, '刷写失败', log);
+  }
+
+  /// 生成 DFU 包
+  Future<WearableResult> nrfGeneratePackage({
+    required String firmwarePath,
+    required String outputPath,
+    required String privateKey,
+    required String appVersion,
+    String? initPacket,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init()) return WearableResult(false, 'nrfutil 未就绪', log);
+    final exe = _exe('nrfutil');
+    if (exe == null) return WearableResult(false, 'nrfutil 未找到', log);
+
+    add('══ 生成 DFU 包');
+    add('  固件: ${p.basename(firmwarePath)}');
+    add('  输出: ${p.basename(outputPath)}');
+    add('  版本: $appVersion');
+    add('');
+
+    final args = [
+      'pkg', 'generate',
+      '--hw-version', '52',
+      '--sd-req', '0x00',
+      '--application-version', appVersion,
+      '--application', firmwarePath,
+      '--key-file', privateKey,
+    ];
+    if (initPacket != null) args.addAll(['--hw-version', '52']);
+    args.add(outputPath);
+
+    final code = await ProcessRunner.stream(
+      exe,
+      args,
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0 && File(outputPath).existsSync()) {
+      add('');
+      add('✅ DFU 包已生成');
+      return WearableResult(true, '包已生成', log);
+    }
+    return WearableResult(false, '生成失败', log);
+  }
+
+  /// 生成密钥对（DFU 签名用）
+  Future<WearableResult> nrfGenerateKeys({
+    required String privateKeyPath,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init()) return WearableResult(false, 'nrfutil 未就绪', log);
+    final exe = _exe('nrfutil');
+    if (exe == null) return WearableResult(false, 'nrfutil 未找到', log);
+
+    add('══ 生成 DFU 密钥');
+    add('  输出: ${p.basename(privateKeyPath)}');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['keys', 'generate', '-k', privateKeyPath],
+      onLine: add,
+      timeout: const Duration(minutes: 1),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 密钥已生成');
+      add('⚠️ 私钥丢失后无法再签固件，请备份');
+      return WearableResult(true, '密钥已生成', log);
+    }
+    return WearableResult(false, '生成失败', log);
   }
 
 }
