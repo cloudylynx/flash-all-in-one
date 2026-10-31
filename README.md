@@ -122,6 +122,48 @@
 
 ---
 
+## 插件系统
+
+主程序 382 MB，主要体积是内置工具。**新功能走插件**，主程序不再膨胀。
+
+### 怎么用
+
+```
+插件 → 点「+」→ 选择 .zip → 自动出现在左侧列表
+```
+
+### 插件能做什么
+
+插件是**声明式**的：用 `plugin.json` 描述 UI 和命令，由主程序解释执行。
+不加载任何外部代码，安全可控。
+
+```json
+{
+  "id": "picotool",
+  "name": "树莓派 Pico",
+  "version": "2.3.1",
+  "tools": [{"name": "picotool", "path": "tools/picotool", "platform": "linux"}],
+  "ui": {
+    "inputs": [{"id": "firmware", "type": "file", "label": "固件"}],
+    "cards": [{
+      "title": "操作",
+      "actions": [
+        {"label": "刷入", "tool": "picotool",
+         "args": ["load", "{input:firmware}", "-x"],
+         "confirm": "确认刷入？", "danger": true}
+      ]
+    }]
+  }
+}
+```
+
+### 开发插件
+
+看 [PLUGIN_AGENTS.md](PLUGIN_AGENTS.md) —— 完整的插件开发规范，
+包括如何把任意开源刷机工具转换成插件。
+
+---
+
 ## 内置工具
 
 全部内置，无需额外下载：

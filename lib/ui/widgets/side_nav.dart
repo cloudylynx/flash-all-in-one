@@ -193,6 +193,11 @@ class SideNav extends StatefulWidget {
         icon: Icons.watch,
         group: '穿戴'),
     NavItem(
+        id: 'plugins',
+        label: '插件',
+        icon: Icons.extension,
+        group: '穿戴'),
+    NavItem(
         id: 'settings', label: '设置', icon: Icons.settings, group: '穿戴'),
   ];
 

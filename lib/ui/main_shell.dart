@@ -24,6 +24,7 @@ import 'pages/ota_page.dart';
 import 'pages/overview_page.dart';
 import 'pages/partitions_page.dart';
 import 'pages/perfetto_page.dart';
+import 'pages/plugins_page.dart';
 import 'pages/imgtool_page.dart';
 import 'pages/recovery_page.dart';
 import 'pages/root_page.dart';
@@ -210,6 +211,8 @@ class _MainShellState extends State<MainShell> {
         return const LogcatPage();
       case 'scripts':
         return const ScriptsPage();
+      case 'plugins':
+        return const PluginsPage();
       case 'settings':
         return const SettingsPage();
       default:
