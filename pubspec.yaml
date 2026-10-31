@@ -27,6 +27,9 @@ flutter:
 
   assets:
     - assets/data/
+    - assets/apk/
+    - assets/tools/windows/common/
+    - assets/tools/windows/ota/
     - assets/tools/windows/
     - assets/tools/windows/scrcpy/
     - assets/tools/windows/mtk/
@@ -42,6 +45,7 @@ flutter:
     - assets/tools/linux/qdl/
     - assets/tools/linux/uad/
     - assets/tools/linux/samloader/
+    - assets/tools/linux/ota/
     - assets/tools/apk/
     - assets/tools/kernelsu/
     - assets/tools/ghostlock/

@@ -49,3 +49,6 @@ app.*.map.json
 
 # 外部工具（体积大，不进仓库）
 tools-external/
+
+# 私人笔记（不入库）
+.sandrone-notes.md

@@ -18,6 +18,7 @@ import 'pages/files_page.dart';
 import 'pages/install_page.dart';
 import 'pages/logcat_page.dart';
 import 'pages/mtk_page.dart';
+import 'pages/ota_page.dart';
 import 'pages/overview_page.dart';
 import 'pages/partitions_page.dart';
 import 'pages/perfetto_page.dart';
@@ -167,6 +168,8 @@ class _MainShellState extends State<MainShell> {
         return const RootPage();
       case 'imgtool':
         return const ImgtoolPage();
+      case 'ota':
+        return const OtaPage();
       case 'files':
         return const FilesPage();
       case 'fastboot':

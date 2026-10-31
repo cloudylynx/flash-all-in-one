@@ -146,6 +146,12 @@ class SideNav extends StatefulWidget {
         group: '高级',
         advanced: true),
     NavItem(
+        id: 'ota',
+        label: 'OTA 造包/重签',
+        icon: Icons.system_update_alt,
+        group: '高级',
+        advanced: true),
+    NavItem(
         id: 'partitions',
         label: '分区读写',
         icon: Icons.grid_view,

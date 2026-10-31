@@ -9,6 +9,7 @@ import '../../core/device_waiter.dart';
 import '../../services/device_provider.dart';
 import '../../services/ghostlock_service.dart';
 import '../../services/kernelsu_service.dart';
+import '../../services/root_manager_service.dart';
 import '../../services/root_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -25,6 +26,11 @@ class RootPage extends StatefulWidget {
 
 class _RootPageState extends State<RootPage> {
   RootMethod _method = RootMethod.magisk;
+
+  // Root 管理器
+  List<RootManager> _installedManagers = [];
+  bool _checkingManagers = false;
+  bool _rootAvailable = false;
 
   // GhostLock 临时 Root
   bool _ghostKernelOk = false;
@@ -65,6 +71,9 @@ class _RootPageState extends State<RootPage> {
     if (device == null || !mounted) return;
     if (_ghostKernelVer == null) {
       await _checkGhost();
+    }
+    if (_installedManagers.isEmpty && !_checkingManagers) {
+      await _checkManagers();
     }
   }
 
@@ -268,6 +277,48 @@ class _RootPageState extends State<RootPage> {
                         style: const TextStyle(
                             fontSize: 12, color: AppTheme.textSecondary),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Root 管理器安装
+                AppCard(
+                  title: 'Root 管理器',
+                  trailing: Row(
+                    children: [
+                      if (_rootAvailable)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.success.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text('已 Root',
+                              style: TextStyle(
+                                  fontSize: 9.5, color: AppTheme.success)),
+                        ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 15),
+                        color: AppTheme.textMuted,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _checkingManagers ? null : _checkManagers,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        '内置 7 个 Root 管理器，可直接推送到设备安装',
+                        style: TextStyle(
+                            fontSize: 11, color: AppTheme.textMuted),
+                      ),
+                      const SizedBox(height: 10),
+                      for (final m in RootManagerService.managers)
+                        _buildManagerRow(m),
                     ],
                   ),
                 ),
@@ -997,6 +1048,130 @@ class _RootPageState extends State<RootPage> {
         ],
       ),
     );
+  }
+
+
+  /// 检查 Root 状态和管理器
+  Future<void> _checkManagers() async {
+    final device = await DeviceWaiter.wait(context);
+    if (device == null || !mounted) return;
+
+    setState(() => _checkingManagers = true);
+
+    final status = await RootManagerService.instance.checkRootStatus(device.serial);
+
+    if (!mounted) return;
+    setState(() {
+      _rootAvailable = status['isRooted'] == true;
+      _installedManagers =
+          (status['managers'] as List).cast<RootManager>();
+      _checkingManagers = false;
+    });
+
+    _addLog('══ Root 状态检查');
+    _addLog('  su 命令: ${status['hasSu'] == true ? "有" : "无"}');
+    _addLog('  已 Root: ${status['isRooted'] == true ? "是" : "否"}');
+    _addLog('  已装管理器: ${_installedManagers.map((m) => m.name).join(", ")}');
+  }
+
+  /// 构建单个管理器行
+  Widget _buildManagerRow(RootManager m) {
+    final installed =
+        _installedManagers.any((x) => x.id == m.id);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(
+            installed ? Icons.check_circle : Icons.android,
+            size: 15,
+            color: installed ? AppTheme.success : AppTheme.textMuted,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  m.name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: installed
+                        ? AppTheme.success
+                        : AppTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  m.description,
+                  style: const TextStyle(
+                      fontSize: 10, color: AppTheme.textMuted),
+                ),
+              ],
+            ),
+          ),
+          if (installed)
+            TextButton(
+              onPressed: _busy ? null : () => _uninstallManager(m),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+              ),
+              child: const Text('卸载', style: TextStyle(fontSize: 10.5)),
+            )
+          else
+            OutlinedButton(
+              onPressed: _busy ? null : () => _installManager(m),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 6),
+                minimumSize: Size.zero,
+              ),
+              child: const Text('安装', style: TextStyle(fontSize: 10.5)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _installManager(RootManager m) async {
+    final device = context.read<DeviceProvider>().selectedDevice;
+    if (device == null) return;
+
+    setState(() => _busy = true);
+    _log.clear();
+
+    final r = await RootManagerService.instance.install(
+      serial: device.serial,
+      manager: m,
+      onLine: _addLog,
+    );
+
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+
+    if (r.ok) await _checkManagers();
+  }
+
+  Future<void> _uninstallManager(RootManager m) async {
+    final device = context.read<DeviceProvider>().selectedDevice;
+    if (device == null) return;
+
+    setState(() => _busy = true);
+    _log.clear();
+
+    final r = await RootManagerService.instance.uninstall(
+      serial: device.serial,
+      manager: m,
+      onLine: _addLog,
+    );
+
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+
+    if (r.ok) await _checkManagers();
   }
 
 }
