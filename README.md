@@ -105,7 +105,10 @@
 从 [Releases](https://github.com/cloudylynx/flash-all-in-one/releases) 下载最新版：
 
 - **Windows**：`FlashAllInOne-v1.0.0-win64.zip`，解压后运行 `flashallinone.exe`
-- **Linux**：`FlashAllInOne-v1.0.0-linux-x64.tar.gz`
+- **Linux**：`FlashAllInOne-v1.1.0-linux-x64.tar.gz`（211 MB，含全部内置工具）
+
+> **v1.1.0 更新**：新增 OTA 造包/重签、7 个 Root 管理器、展锐高级维护
+> Linux 包可直接从 [Releases](https://github.com/cloudylynx/flash-all-in-one/releases/tag/v1.1.0) 下载
 
 ### 从源码构建
 
