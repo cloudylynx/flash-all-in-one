@@ -122,7 +122,6 @@ class SideNav extends StatefulWidget {
         label: '脚本录制',
         icon: Icons.play_circle_outline,
         group: '工具'),
-    NavItem(id: 'settings', label: '设置', icon: Icons.settings, group: '工具'),
   ];
 
   /// 高级功能（危险，需协议确认）
@@ -171,8 +170,21 @@ class SideNav extends StatefulWidget {
         advanced: true),
   ];
 
+  /// 智能穿戴 / 开发板 + 设置（不在危险框内）
+  static const List<NavItem> extraItems = [
+    NavItem(
+        id: 'wearable',
+        label: '智能穿戴/开发板',
+        icon: Icons.watch,
+        group: '穿戴'),
+    NavItem(
+        id: 'settings', label: '设置', icon: Icons.settings, group: '穿戴'),
+  ];
+
+
   /// 全部
-  static List<NavItem> get items => [...regularItems, ...advancedItems];
+  static List<NavItem> get items =>
+      [...regularItems, ...advancedItems, ...extraItems];
 
   /// 按 id 查
   static NavItem? byId(String id) {
@@ -338,6 +350,16 @@ class _SideNavState extends State<SideNav> {
                     ],
                   ),
                 ),
+                  // ═══ 智能穿戴 / 开发板 + 设置（不在危险框内）═══
+                  const SizedBox(height: 10),
+                  _groupHeader('智能穿戴 / 开发板'),
+                  for (final item
+                      in SideNav.extraItems.where(_matches))
+                    _NavTile(
+                      item: item,
+                      selected: widget.selected == item.id,
+                      onTap: () => widget.onSelect(item.id),
+                    ),
               ],
             ),
           ),

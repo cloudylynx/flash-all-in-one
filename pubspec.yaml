@@ -1,7 +1,7 @@
 name: flashallinone
 description: "Flash All In One - 一站式 Android 刷机与设备管理工具箱"
 publish_to: 'none'
-version: 1.3.0+4
+version: 1.4.0+5
 
 environment:
   sdk: ^3.13.7
@@ -15,6 +15,7 @@ dependencies:
   shared_preferences: ^2.3.3
   cupertino_icons: ^1.0.8
   window_manager: ^0.4.3
+  url_launcher: ^6.3.0
   file_picker: ^8.1.6
 
 dev_dependencies:
@@ -32,6 +33,9 @@ flutter:
     - assets/tools/windows/ota/
     - assets/tools/windows/recovery/
     - assets/tools/windows/rockchip/
+    - assets/tools/windows/esp/
+    - assets/tools/windows/rpi/
+    - assets/tools/windows/arduino/
     - assets/tools/windows/
     - assets/tools/windows/scrcpy/
     - assets/tools/windows/mtk/
@@ -51,6 +55,9 @@ flutter:
     - assets/tools/linux/recovery/
     - assets/tools/linux/rockchip/
     - assets/tools/linux/allwinner/
+    - assets/tools/linux/esp/
+    - assets/tools/linux/rpi/
+    - assets/tools/linux/arduino/
     - assets/tools/apk/
     - assets/tools/kernelsu/
     - assets/tools/ghostlock/

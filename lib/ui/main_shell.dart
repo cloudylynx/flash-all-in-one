@@ -31,6 +31,7 @@ import 'pages/sbc_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/shell_page.dart';
 import 'pages/vendor_page.dart';
+import 'pages/wearable_page.dart';
 import 'pages/wireless_page.dart';
 import 'theme/app_theme.dart';
 import 'widgets/common.dart';
@@ -176,6 +177,8 @@ class _MainShellState extends State<MainShell> {
         return const RecoveryPage();
       case 'sbc':
         return const SbcPage();
+      case 'wearable':
+        return const WearablePage();
       case 'files':
         return const FilesPage();
       case 'fastboot':
