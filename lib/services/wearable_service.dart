@@ -64,6 +64,89 @@ class WearableService {
       executable: true,
     );
 
+    // picotool（树莓派 Pico，仅 Linux）
+    if (!Platform.isWindows) {
+      await ToolExtractor.extractFile(
+        assetPath: 'assets/tools/linux/pico/picotool',
+        subDir: 'wearable',
+        fileName: 'picotool',
+        executable: true,
+      );
+    }
+
+    // stlink（STM32）
+    final stSuffix = Platform.isWindows ? '.exe' : '';
+    for (final name in ['st-flash', 'st-info', 'st-util']) {
+      await ToolExtractor.extractFile(
+        assetPath: 'assets/tools/$plat/stm32/$name$stSuffix',
+        subDir: 'wearable',
+        fileName: '$name$stSuffix',
+        executable: true,
+      );
+    }
+    // stlink 的芯片描述文件（81 个）
+    if (!Platform.isWindows) {
+      // 提取所有 .chip（81 个，硬编码因为 Flutter 3.x 无 AssetManifest.json）
+      const chips = [
+        'C011xx', 'C031xx', 'C051xx', 'C071xx', 'C091xx',
+        'C53x_C54x', 'C55x_C56x', 'C59x_C5Ax',
+        'F03x', 'F04x', 'F05x', 'F07x', 'F09x',
+        'F1xx_CL', 'F1xx_HD', 'F1xx_LD', 'F1xx_MD',
+        'F1xx_VL_HD', 'F1xx_VL_MD_LD', 'F1xx_XLD',
+        'F2xx', 'F301_F302_F318', 'F302_F303_F358',
+        'F302_F303_F398_HD', 'F303_F328_F334', 'F37x',
+        'F401xB_xC', 'F401xD_xE', 'F410', 'F411xC_xE', 'F412',
+        'F413_F423', 'F42x_F43x', 'F446', 'F46x_F47x', 'F4x5_F4x7',
+        'F72x_F73x', 'F74x_F75x', 'F76x_F77x',
+        'G03x_G04x', 'G05x_G06x', 'G07x_G08x', 'G0Bx_G0Cx',
+        'G43x_G44x', 'G47x_G48x', 'G49x_G4Ax',
+        'H52_H53xx', 'H5xx', 'H72x_H73x', 'H74x_H75x', 'H7Ax_H7Bx',
+        'L0xxx_Cat_1', 'L0xxx_Cat_2', 'L0xxx_Cat_3', 'L0xxx_Cat_5',
+        'L1xx_Cat_1', 'L1xx_Cat_2', 'L1xx_Cat_3', 'L1xx_Cat_4', 'L1xx_Cat_5',
+        'L41x_L42x', 'L43x_L44x', 'L45x_L46x', 'L47x_L48x',
+        'L496x_L4A6x', 'L4Px_L4Qx', 'L4Rx', 'L5x2xx',
+        'U031xx', 'U073xx_083xx', 'U535_U545', 'U575_U585',
+        'U59x_U5Ax', 'U5Fx_U5Gx',
+        'WB05', 'WB06_WB07', 'WB09', 'WBx0_WBx5',
+        'WL3x', 'WLEx', 'unknown_device',
+      ];
+      for (final chip in chips) {
+        await ToolExtractor.extractFile(
+          assetPath: 'assets/tools/linux/stm32/chips/$chip.chip',
+          subDir: 'wearable/chips',
+          fileName: '$chip.chip',
+        );
+      }
+    }
+
+    // stlink 的库
+    if (Platform.isWindows) {
+      await ToolExtractor.extractFile(
+        assetPath: 'assets/tools/windows/stm32/libstlink.dll',
+        subDir: 'wearable',
+        fileName: 'libstlink.dll',
+      );
+    } else {
+      for (final lib in ['libstlink.so.1.9.0']) {
+        await ToolExtractor.extractFile(
+          assetPath: 'assets/tools/linux/stm32/$lib',
+          subDir: 'wearable',
+          fileName: lib,
+        );
+      }
+      // 创建软链接
+      try {
+        final dir = _dir!;
+        final so = File(p.join(dir, 'libstlink.so.1.9.0'));
+        if (so.existsSync()) {
+          final l1 = Link(p.join(dir, 'libstlink.so.1'));
+          if (!l1.existsSync()) {
+            await l1.create('libstlink.so.1.9.0');
+          }
+        }
+      } catch (_) {}
+    }
+
     _available = _dir != null;
     return _available;
   }
@@ -522,4 +605,410 @@ class WearableService {
     }
     return WearableResult(false, '上传失败', log);
   }
+
+  // ═══════════════════════════════════════════════
+  // 树莓派 Pico（RP2040 / RP2350）
+  // ═══════════════════════════════════════════════
+
+  /// picotool 版本
+  Future<String?> picotoolVersion() async {
+    if (Platform.isWindows) return null;
+    if (!await init()) return null;
+    final exe = _exe('picotool');
+    if (exe == null) return null;
+    final r = await ProcessRunner.run(exe, ['version'],
+        timeout: AppConfig.shortTimeout, workingDirectory: _dir);
+    final m = RegExp(r'v([\d.]+)').firstMatch(r.output);
+    return m?.group(1);
+  }
+
+  /// 列出 BOOTSEL 模式的 Pico 设备
+  Future<WearableResult> picoListDevices({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (Platform.isWindows) {
+      return WearableResult(false, 'picotool 目前仅支持 Linux', log);
+    }
+    if (!await init()) return WearableResult(false, 'picotool 未就绪', log);
+    final exe = _exe('picotool');
+    if (exe == null) return WearableResult(false, 'picotool 未找到', log);
+
+    add('══ Pico 设备列表');
+    add('  （需要设备处于 BOOTSEL 模式：按住 BOOTSEL 键插 USB）');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['info'],
+      onLine: add,
+      timeout: const Duration(seconds: 20),
+      workingDirectory: _dir,
+    );
+
+    return WearableResult(code == 0, code == 0 ? '已列出' : '未检测到设备', log);
+  }
+
+  /// 读取 Pico 固件信息
+  Future<WearableResult> picoInfo({
+    required String uf2Path,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (Platform.isWindows) {
+      return WearableResult(false, 'picotool 目前仅支持 Linux', log);
+    }
+    if (!await init()) return WearableResult(false, 'picotool 未就绪', log);
+    final exe = _exe('picotool');
+    if (exe == null) return WearableResult(false, 'picotool 未找到', log);
+
+    add('══ 固件信息');
+    add('  文件: ${p.basename(uf2Path)}');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['info', uf2Path],
+      onLine: add,
+      timeout: const Duration(seconds: 30),
+      workingDirectory: _dir,
+    );
+
+    return WearableResult(code == 0, code == 0 ? '已读取' : '读取失败', log);
+  }
+
+  /// 刷写 Pico 固件
+  Future<WearableResult> picoFlash({
+    required String firmwarePath,
+    bool verify = true,
+    bool reboot = true,
+    bool confirmed = false,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!confirmed) {
+      return WearableResult(false, '需要确认（confirmed=false）', log);
+    }
+
+    if (Platform.isWindows) {
+      return WearableResult(false, 'picotool 目前仅支持 Linux', log);
+    }
+    if (!await init()) return WearableResult(false, 'picotool 未就绪', log);
+    final exe = _exe('picotool');
+    if (exe == null) return WearableResult(false, 'picotool 未找到', log);
+
+    if (!File(firmwarePath).existsSync()) {
+      return WearableResult(false, '固件文件不存在', log);
+    }
+
+    add('══ 刷写 Pico 固件');
+    add('  文件: ${p.basename(firmwarePath)}');
+    add('  大小: ${(File(firmwarePath).lengthSync() / 1024).toStringAsFixed(1)} KB');
+    if (verify) add('  刷后校验: 是');
+    if (reboot) add('  刷后重启: 是');
+    add('');
+    add('ℹ️ 支持 .uf2 / .elf / .bin');
+
+    final args = <String>['load', firmwarePath];
+    if (reboot) args.add('-x');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      args,
+      onLine: add,
+      timeout: const Duration(minutes: 3),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 刷写完成');
+      return WearableResult(true, '固件已刷入', log);
+    }
+    return WearableResult(false, '刷写失败', log);
+  }
+
+  /// 从 Pico 读取 Flash
+  Future<WearableResult> picoSave({
+    required String outputPath,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (Platform.isWindows) {
+      return WearableResult(false, 'picotool 目前仅支持 Linux', log);
+    }
+    if (!await init()) return WearableResult(false, 'picotool 未就绪', log);
+    final exe = _exe('picotool');
+    if (exe == null) return WearableResult(false, 'picotool 未找到', log);
+
+    add('══ 读取 Pico Flash');
+    add('  输出: ${p.basename(outputPath)}');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['save', '-a', outputPath],
+      onLine: add,
+      timeout: const Duration(minutes: 3),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0 && File(outputPath).existsSync()) {
+      final size = File(outputPath).lengthSync();
+      add('');
+      add('✅ 已读取 ${(size / 1024).toStringAsFixed(1)} KB');
+      return WearableResult(true, 'Flash 已读取', log);
+    }
+    return WearableResult(false, '读取失败', log);
+  }
+
+  /// 擦除 Pico Flash
+  Future<WearableResult> picoErase({
+    bool confirmed = false,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!confirmed) {
+      return WearableResult(false, '需要确认（confirmed=false）', log);
+    }
+
+    if (Platform.isWindows) {
+      return WearableResult(false, 'picotool 目前仅支持 Linux', log);
+    }
+    if (!await init()) return WearableResult(false, 'picotool 未就绪', log);
+    final exe = _exe('picotool');
+    if (exe == null) return WearableResult(false, 'picotool 未找到', log);
+
+    add('══ 擦除 Pico Flash');
+    add('');
+    add('⚠️ 擦除后设备无法启动，必须先有可刷的固件');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['erase', '-a'],
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 已擦除');
+      return WearableResult(true, 'Flash 已擦除', log);
+    }
+    return WearableResult(false, '擦除失败', log);
+  }
+
+  // ═══════════════════════════════════════════════
+  // STM32（stlink）
+  // ═══════════════════════════════════════════════
+
+  /// stlink 需要的环境变量（chips 目录 + 库路径）
+  Map<String, String>? _stlinkEnv() {
+    if (_dir == null) return null;
+    if (Platform.isWindows) return null;
+    return {
+      'STLINK_CHIPS_DIR': p.join(_dir!, 'chips'),
+      'LD_LIBRARY_PATH': _dir!,
+    };
+  }
+
+  /// st-info 版本
+  Future<String?> stlinkVersion() async {
+    if (!await init()) return null;
+    final exe = _exe('st-info');
+    if (exe == null) return null;
+    final r = await ProcessRunner.run(exe, ['--version'],
+        timeout: AppConfig.shortTimeout, workingDirectory: _dir);
+    final m = RegExp(r'v?([\d.]+)').firstMatch(r.output);
+    return m?.group(1);
+  }
+
+  /// 检测 STM32 设备
+  Future<WearableResult> stlinkProbe({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init()) return WearableResult(false, 'stlink 未就绪', log);
+    final exe = _exe('st-info');
+    if (exe == null) return WearableResult(false, 'st-info 未找到', log);
+
+    add('══ STM32 设备检测');
+    add('  （需要 ST-Link 调试器）');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['--probe'],
+      onLine: add,
+      timeout: const Duration(seconds: 20),
+      workingDirectory: _dir,
+      environment: _stlinkEnv(),
+    );
+
+    return WearableResult(code == 0, code == 0 ? '检测成功' : '未检测到设备', log);
+  }
+
+  /// 读取 STM32 Flash
+  Future<WearableResult> stlinkReadFlash({
+    required String address,
+    required int size,
+    required String outputPath,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init()) return WearableResult(false, 'stlink 未就绪', log);
+    final exe = _exe('st-flash');
+    if (exe == null) return WearableResult(false, 'st-flash 未找到', log);
+
+    add('══ 读取 STM32 Flash');
+    add('  地址: $address');
+    add('  大小: $size 字节');
+    add('  输出: ${p.basename(outputPath)}');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['read', outputPath, address, '$size'],
+      onLine: add,
+      timeout: const Duration(minutes: 5),
+      workingDirectory: _dir,
+      environment: _stlinkEnv(),
+    );
+
+    if (code == 0 && File(outputPath).existsSync()) {
+      final actual = File(outputPath).lengthSync();
+      add('');
+      add('✅ 已读取 ${(actual / 1024).toStringAsFixed(1)} KB');
+      return WearableResult(true, 'Flash 已读取', log);
+    }
+    return WearableResult(false, '读取失败', log);
+  }
+
+  /// 刷写 STM32 固件
+  Future<WearableResult> stlinkFlash({
+    required String firmwarePath,
+    String address = '0x08000000',
+    bool verify = true,
+    bool confirmed = false,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!confirmed) {
+      return WearableResult(false, '需要确认（confirmed=false）', log);
+    }
+
+    if (!await init()) return WearableResult(false, 'stlink 未就绪', log);
+    final exe = _exe('st-flash');
+    if (exe == null) return WearableResult(false, 'st-flash 未找到', log);
+
+    if (!File(firmwarePath).existsSync()) {
+      return WearableResult(false, '固件文件不存在', log);
+    }
+
+    add('══ 刷写 STM32 固件');
+    add('  文件: ${p.basename(firmwarePath)}');
+    add('  大小: ${(File(firmwarePath).lengthSync() / 1024).toStringAsFixed(1)} KB');
+    add('  地址: $address');
+    add('');
+    add('⚠️ STM32 的 Flash 起始地址通常是 0x08000000');
+    add('  写错地址会导致设备无法启动');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['--reset', 'write', firmwarePath, address],
+      onLine: add,
+      timeout: const Duration(minutes: 5),
+      workingDirectory: _dir,
+      environment: _stlinkEnv(),
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 刷写完成');
+      return WearableResult(true, '固件已刷入', log);
+    }
+    return WearableResult(false, '刷写失败', log);
+  }
+
+  /// 擦除 STM32 Flash
+  Future<WearableResult> stlinkErase({
+    bool confirmed = false,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!confirmed) {
+      return WearableResult(false, '需要确认（confirmed=false）', log);
+    }
+
+    if (!await init()) return WearableResult(false, 'stlink 未就绪', log);
+    final exe = _exe('st-flash');
+    if (exe == null) return WearableResult(false, 'st-flash 未找到', log);
+
+    add('══ 擦除 STM32 Flash');
+    add('');
+    add('⚠️ 擦除后设备无法启动');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['erase'],
+      onLine: add,
+      timeout: const Duration(minutes: 3),
+      workingDirectory: _dir,
+      environment: _stlinkEnv(),
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 已擦除');
+      return WearableResult(true, 'Flash 已擦除', log);
+    }
+    return WearableResult(false, '擦除失败', log);
+  }
+
 }

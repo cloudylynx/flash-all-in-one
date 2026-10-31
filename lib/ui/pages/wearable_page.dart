@@ -23,6 +23,8 @@ class _WearablePageState extends State<WearablePage> {
 
   String? _espVer;
   String? _arduinoVer;
+  String? _picoVer;
+  String? _stlinkVer;
 
   // ESP
   final _portController = TextEditingController(text: '/dev/ttyUSB0');
@@ -54,11 +56,15 @@ class _WearablePageState extends State<WearablePage> {
     final ok = await WearableService.instance.init();
     final ev = await WearableService.instance.esptoolVersion();
     final av = await WearableService.instance.arduinoVersion();
+    final pv = await WearableService.instance.picotoolVersion();
+    final sv = await WearableService.instance.stlinkVersion();
     if (!mounted) return;
     setState(() {
       _ready = ok;
       _espVer = ev;
       _arduinoVer = av;
+      _picoVer = pv;
+      _stlinkVer = sv;
     });
   }
 
@@ -99,10 +105,12 @@ class _WearablePageState extends State<WearablePage> {
                 child: Row(
                   children: [
                     for (final (id, label, sub) in [
-                      ('esp', 'ESP32/ESP8266', 'esptool 5.6.0'),
+                      ('esp', 'ESP32', 'esptool'),
+                      ('pico', 'Pico', 'picotool'),
+                      ('stm32', 'STM32', 'stlink'),
                       ('rpi', '树莓派', 'rpiboot'),
                       ('arduino', 'Arduino', 'arduino-cli'),
-                      ('astro', '小米穿戴', 'AstroBox 外链'),
+                      ('astro', '小米穿戴', 'AstroBox'),
                     ])
                       Expanded(
                         child: InkWell(
@@ -150,11 +158,15 @@ class _WearablePageState extends State<WearablePage> {
                   padding: const EdgeInsets.all(18),
                   child: _platform == 'esp'
                       ? _buildEsp()
-                      : _platform == 'rpi'
-                          ? _buildRpi()
-                          : _platform == 'arduino'
-                              ? _buildArduino()
-                              : _buildAstro(),
+                      : _platform == 'pico'
+                          ? _buildPico()
+                          : _platform == 'stm32'
+                              ? _buildStm32()
+                              : _platform == 'rpi'
+                                  ? _buildRpi()
+                                  : _platform == 'arduino'
+                                      ? _buildArduino()
+                                      : _buildAstro(),
                 ),
               ),
             ],
@@ -469,6 +481,359 @@ class _WearablePageState extends State<WearablePage> {
                           confirmed: true,
                           onLine: _addLog,
                         );
+                      }),
+              icon: const Icon(Icons.delete_forever, size: 15),
+              label: const Text('擦除（危险）',
+                  style: TextStyle(fontSize: 11.5)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.danger,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _buildPico() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (_picoVer != null ? AppTheme.success : AppTheme.danger)
+                .withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(_picoVer != null ? Icons.check_circle : Icons.error,
+                  size: 15,
+                  color:
+                      _picoVer != null ? AppTheme.success : AppTheme.danger),
+              const SizedBox(width: 8),
+              Text(
+                _picoVer != null
+                    ? 'picotool $_picoVer'
+                    : 'picotool 未就绪（仅 Linux）',
+                style: const TextStyle(
+                    fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('树莓派 Pico（RP2040 / RP2350）',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary)),
+              SizedBox(height: 8),
+              Text(
+                '进入 BOOTSEL 模式：\n'
+                '  按住 BOOTSEL 键，插 USB，松开\n\n'
+                '支持格式：.uf2 / .elf / .bin',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppTheme.textSecondary,
+                    height: 1.7),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: '设备检测',
+          child: Column(
+            children: [
+              _action(Icons.usb, '列出设备', 'info',
+                  () => _run(() => WearableService.instance
+                      .picoListDevices(onLine: _addLog))),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: '刷写固件',
+          trailing: OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () async {
+                    final r = await FilePicker.platform.pickFiles(
+                      dialogTitle: '选择固件（.uf2 / .elf / .bin）',
+                      type: FileType.any,
+                    );
+                    if (r != null && r.files.single.path != null) {
+                      setState(() => _firmwarePath = r.files.single.path);
+                    }
+                  },
+            style: OutlinedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+            child: const Text('选择', style: TextStyle(fontSize: 11.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _firmwarePath?.split(Platform.pathSeparator).last ??
+                    '未选择固件',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: _firmwarePath != null
+                      ? AppTheme.textPrimary
+                      : AppTheme.textMuted,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (_firmwarePath != null) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(() async {
+                              final ok = await _confirm('刷写 Pico 固件',
+                                  '将把 ${_firmwarePath!.split(Platform.pathSeparator).last} 写入 Pico。');
+                              if (ok != true) {
+                                return WearableResult(false, '已取消', []);
+                              }
+                              return WearableService.instance.picoFlash(
+                                firmwarePath: _firmwarePath!,
+                                confirmed: true,
+                                onLine: _addLog,
+                              );
+                            }),
+                    icon: const Icon(Icons.flash_on, size: 16),
+                    label: const Text('刷写',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: '其他',
+          child: Column(
+            children: [
+              _action(Icons.save_alt, '读取 Flash', 'save -a',
+                  () => _run(() => WearableService.instance.picoSave(
+                      outputPath: '/tmp/pico-flash.bin', onLine: _addLog))),
+              const Divider(height: 16),
+              _action(Icons.delete_forever, '擦除 Flash', 'erase -a',
+                  () => _run(() async {
+                        final ok = await _confirm('擦除 Pico Flash',
+                            '擦除后设备无法启动，必须先有可刷的固件。');
+                        if (ok != true) {
+                          return WearableResult(false, '已取消', []);
+                        }
+                        return WearableService.instance.picoErase(
+                            confirmed: true, onLine: _addLog);
+                      })),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStm32() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (_stlinkVer != null ? AppTheme.success : AppTheme.danger)
+                .withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(_stlinkVer != null ? Icons.check_circle : Icons.error,
+                  size: 15,
+                  color: _stlinkVer != null
+                      ? AppTheme.success
+                      : AppTheme.danger),
+              const SizedBox(width: 8),
+              Text(
+                _stlinkVer != null
+                    ? 'stlink $_stlinkVer'
+                    : 'stlink 未就绪',
+                style: const TextStyle(
+                    fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('STM32 单片机',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary)),
+              SizedBox(height: 8),
+              Text(
+                '需要 ST-Link 调试器（或 ST-Link V2 克隆版）\n\n'
+                '接线：SWDIO / SWCLK / GND / 3.3V\n\n'
+                'Flash 起始地址通常是 0x08000000',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppTheme.textSecondary,
+                    height: 1.7),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: '设备检测',
+          child: _action(Icons.memory, '检测设备', 'st-info --probe',
+              () => _run(() => WearableService.instance
+                  .stlinkProbe(onLine: _addLog))),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: '刷写固件',
+          trailing: OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () async {
+                    final r = await FilePicker.platform.pickFiles(
+                      dialogTitle: '选择固件（.bin / .hex）',
+                      type: FileType.any,
+                    );
+                    if (r != null && r.files.single.path != null) {
+                      setState(() => _firmwarePath = r.files.single.path);
+                    }
+                  },
+            style: OutlinedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+            child: const Text('选择', style: TextStyle(fontSize: 11.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _firmwarePath?.split(Platform.pathSeparator).last ??
+                    '未选择固件',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: _firmwarePath != null
+                      ? AppTheme.textPrimary
+                      : AppTheme.textMuted,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 70,
+                    child: Text('地址',
+                        style: TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary)),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: TextEditingController(
+                          text: '0x08000000'),
+                      onChanged: (v) => _address = v,
+                      decoration: const InputDecoration(
+                        hintText: '0x08000000',
+                        isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      style: const TextStyle(
+                          fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 38,
+                child: ElevatedButton.icon(
+                  onPressed: (_busy || _firmwarePath == null)
+                      ? null
+                      : () => _run(() async {
+                            final ok = await _confirm('刷写 STM32 固件',
+                                '将把 ${_firmwarePath!.split(Platform.pathSeparator).last} 写入 0x08000000。\n\n写错地址会导致设备无法启动。');
+                            if (ok != true) {
+                              return WearableResult(false, '已取消', []);
+                            }
+                            return WearableService.instance.stlinkFlash(
+                              firmwarePath: _firmwarePath!,
+                              address: '0x08000000',
+                              confirmed: true,
+                              onLine: _addLog,
+                            );
+                          }),
+                  icon: const Icon(Icons.flash_on, size: 16),
+                  label: const Text('刷写',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        AppCard(
+          title: '擦除',
+          child: SizedBox(
+            height: 36,
+            child: OutlinedButton.icon(
+              onPressed: _busy
+                  ? null
+                  : () => _run(() async {
+                        final ok = await _confirm('擦除 STM32 Flash',
+                            '擦除后设备无法启动。');
+                        if (ok != true) {
+                          return WearableResult(false, '已取消', []);
+                        }
+                        return WearableService.instance.stlinkErase(
+                            confirmed: true, onLine: _addLog);
                       }),
               icon: const Icon(Icons.delete_forever, size: 15),
               label: const Text('擦除（危险）',
