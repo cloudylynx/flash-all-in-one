@@ -19,6 +19,8 @@ class IosPage extends StatefulWidget {
 class _IosPageState extends State<IosPage> {
   bool _ready = false;
   String? _version;
+  String? _palera1nVer;
+  bool _usbmuxdOk = false;
   bool _busy = false;
   String? _ipswPath;
 
@@ -40,10 +42,14 @@ class _IosPageState extends State<IosPage> {
   Future<void> _init() async {
     final ok = await IosService.instance.init();
     final ver = await IosService.instance.version();
+    final pv = await IosService.instance.palera1nVersion();
+    final muxd = await IosService.instance.isUsbmuxdRunning();
     if (!mounted) return;
     setState(() {
       _ready = ok;
       _version = ver;
+      _palera1nVer = pv;
+      _usbmuxdOk = muxd;
     });
   }
 
@@ -298,15 +304,166 @@ class _IosPageState extends State<IosPage> {
                 ),
                 const SizedBox(height: 14),
 
-                // 越狱说明
+                // ═══ 越狱（palera1n）═══
                 AppCard(
-                  title: '关于越狱',
+                  title: '越狱（palera1n）',
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (_palera1nVer != null
+                              ? AppTheme.success
+                              : AppTheme.danger)
+                          .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _palera1nVer != null ? 'v$_palera1nVer' : '未就绪',
+                      style: TextStyle(
+                          fontSize: 9,
+                          color: _palera1nVer != null
+                              ? AppTheme.success
+                              : AppTheme.danger),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // usbmuxd 状态
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: (_usbmuxdOk
+                                  ? AppTheme.success
+                                  : AppTheme.warning)
+                              .withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _usbmuxdOk
+                                  ? Icons.check_circle
+                                  : Icons.warning_amber,
+                              size: 13,
+                              color: _usbmuxdOk
+                                  ? AppTheme.success
+                                  : AppTheme.warning,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _usbmuxdOk
+                                    ? 'usbmuxd 运行中'
+                                    : 'usbmuxd 未运行（越狱时会自动尝试启动）',
+                                style: const TextStyle(
+                                    fontSize: 10.5,
+                                    color: AppTheme.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // 支持设备
+                      const Text('支持的设备',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textSecondary)),
+                      const SizedBox(height: 6),
+                      for (final d in IosService.supportedDevices)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 44,
+                                child: Text(d['chip']!,
+                                    style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontFamily: 'monospace',
+                                        color: AppTheme.accent)),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  d['models']!,
+                                  style: const TextStyle(
+                                      fontSize: 10.5,
+                                      color: AppTheme.textSecondary),
+                                ),
+                              ),
+                              Text(
+                                d['support']!,
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: d['support']!.startsWith('✅')
+                                        ? AppTheme.success
+                                        : AppTheme.danger),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 14),
+
+                      // 操作
+                      _action(Icons.info_outline, '读设备信息（含 DFU）',
+                          'palera1n -I',
+                          () => _run(() => IosService.instance
+                              .deviceInfoJailbreak(onLine: _addLog))),
+                      const Divider(height: 16),
+                      _action(Icons.usb, '进入 DFU 模式', 'palera1n -D',
+                          () => _run(() => IosService.instance
+                              .enterDfu(onLine: _addLog))),
+                      const Divider(height: 16),
+                      _action(Icons.lock_open, '执行越狱（rootless）',
+                          'palera1n -l', () => _run(() async {
+                            final ok = await _confirm(
+                                '执行越狱',
+                                '将对设备执行 palera1n 越狱。\n\n'
+                                '⚠️ 设备会多次重启，不要断开 USB\n'
+                                '⚠️ 越狱后部分银行 App 可能无法使用\n'
+                                '⚠️ 仅支持 A8-A11 设备（iPhone 6s~X）\n'
+                                '⚠️ iOS 15.0+');
+                            if (ok != true) {
+                              return IosResult(false, '已取消', []);
+                            }
+                            return IosService.instance.jailbreak(
+                              confirmed: true,
+                              onLine: _addLog,
+                            );
+                          })),
+                      const Divider(height: 16),
+                      _action(Icons.exit_to_app, '退出恢复模式', 'palera1n -n',
+                          () => _run(() => IosService.instance
+                              .exitRecovery(onLine: _addLog))),
+                      const Divider(height: 16),
+                      _action(Icons.delete_forever, '移除越狱',
+                          'palera1n --force-revert', () => _run(() async {
+                            final ok = await _confirm('移除越狱',
+                                '会清除 fakefs 和越狱环境，恢复原状。');
+                            if (ok != true) {
+                              return IosResult(false, '已取消', []);
+                            }
+                            return IosService.instance.removeJailbreak(
+                              confirmed: true,
+                              onLine: _addLog,
+                            );
+                          })),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 其他越狱工具（外链）
+                AppCard(
+                  title: '其他越狱工具',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        '本项目不集成越狱工具（法律风险 + 需特定漏洞利用）。\n'
-                        '以下是主流越狱工具，请自行前往官网：',
+                        'palera1n 只支持 A8-A11。以下工具支持更新的设备：',
                         style: TextStyle(
                             fontSize: 11,
                             color: AppTheme.textMuted,

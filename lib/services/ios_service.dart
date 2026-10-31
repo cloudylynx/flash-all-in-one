@@ -90,6 +90,14 @@ class IosService {
       }
     }
 
+    // palera1n（越狱）
+    await ToolExtractor.extractFile(
+      assetPath: 'assets/tools/linux/ios/palera1n',
+      subDir: 'ios',
+      fileName: 'palera1n',
+      executable: true,
+    );
+
     // 依赖库
     const libs = [
       'libirecovery-1.0.so.5',
@@ -523,4 +531,284 @@ class IosService {
       'url': 'https://unc0ver.dev',
     },
   ];
+
+  // ═══════════════════════════════════════════════
+  // 越狱（palera1n）
+  // ═══════════════════════════════════════════════
+
+  /// palera1n 版本
+  Future<String?> palera1nVersion() async {
+    if (!await init()) return null;
+    final exe = _exe('palera1n');
+    if (exe == null) return null;
+    final r = await ProcessRunner.run(
+      exe,
+      ['--version'],
+      timeout: AppConfig.shortTimeout,
+      workingDirectory: _dir,
+    );
+    final m = RegExp(r'v([\d.]+)').firstMatch(r.output);
+    return m?.group(1);
+  }
+
+  /// 检查 usbmuxd 是否运行（palera1n 需要）
+  Future<bool> isUsbmuxdRunning() async {
+    if (Platform.isWindows) return false;
+    try {
+      final r = await ProcessRunner.run(
+        'systemctl',
+        ['is-active', 'usbmuxd'],
+        timeout: const Duration(seconds: 5),
+      );
+      if (r.stdout.trim() == 'active') return true;
+      // 备用：检查 socket
+      return File('/var/run/usbmuxd').existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 启动 usbmuxd
+  Future<bool> startUsbmuxd() async {
+    if (Platform.isWindows) return false;
+    try {
+      // 先试 systemctl
+      var r = await ProcessRunner.run(
+        'systemctl',
+        ['start', 'usbmuxd'],
+        timeout: const Duration(seconds: 10),
+      );
+      if (r.ok) return true;
+
+      // 备用：直接跑（需要权限）
+      r = await ProcessRunner.run(
+        'usbmuxd',
+        ['-v'],
+        timeout: const Duration(seconds: 3),
+      );
+      return File('/var/run/usbmuxd').existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 读取设备信息（palera1n 的 -I）
+  ///
+  /// 这个在恢复模式/DFU 模式下也能用
+  Future<IosResult> deviceInfoJailbreak({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init()) return IosResult(false, 'palera1n 未就绪', log);
+    final exe = _exe('palera1n');
+    if (exe == null) return IosResult(false, 'palera1n 未找到', log);
+
+    add('══ 设备信息（含 DFU/恢复模式）');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['-I'],
+      onLine: add,
+      timeout: const Duration(seconds: 20),
+      workingDirectory: _dir,
+    );
+
+    return IosResult(code == 0, code == 0 ? '已读取' : '未检测到设备', log);
+  }
+
+  /// 进入 DFU 模式
+  Future<IosResult> enterDfu({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init()) return IosResult(false, 'palera1n 未就绪', log);
+    final exe = _exe('palera1n');
+    if (exe == null) return IosResult(false, 'palera1n 未找到', log);
+
+    add('══ 进入 DFU 模式');
+    add('');
+    add('ℹ️ 会引导设备进入 DFU，然后退出');
+    add('  请按屏幕提示操作');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['-D'],
+      onLine: add,
+      timeout: const Duration(minutes: 3),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 设备已进入 DFU 模式');
+      return IosResult(true, '已进入 DFU', log);
+    }
+    return IosResult(false, '进入失败', log);
+  }
+
+  /// 执行越狱（rootless 模式）
+  ///
+  /// rootless 是 palera1n 的默认模式，兼容性最好
+  Future<IosResult> jailbreak({
+    bool rootless = true,
+    bool safeMode = false,
+    bool verbose = false,
+    bool confirmed = false,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!confirmed) {
+      return IosResult(false, '需要确认（confirmed=false）', log);
+    }
+
+    if (!await init()) return IosResult(false, 'palera1n 未就绪', log);
+    final exe = _exe('palera1n');
+    if (exe == null) return IosResult(false, 'palera1n 未找到', log);
+
+    // 检查 usbmuxd
+    final muxdOk = await isUsbmuxdRunning();
+    if (!muxdOk) {
+      add('⚠️ usbmuxd 未运行，尝试启动…');
+      final started = await startUsbmuxd();
+      if (!started) {
+        add('❌ usbmuxd 启动失败');
+        add('');
+        add('请手动运行：');
+        add('  sudo systemctl start usbmuxd');
+        add('  或 sudo usbmuxd');
+        return IosResult(false, 'usbmuxd 未运行', log);
+      }
+      add('✅ usbmuxd 已启动');
+    }
+
+    add('══ 越狱（palera1n）');
+    add('  模式: ${rootless ? "rootless（默认，兼容性好）" : "rootful（需要 fakefs）"}');
+    if (safeMode) add('  安全模式: 开');
+    add('');
+    add('⚠️ 支持的设备：A8-A11（iPhone 6s ~ iPhone X）');
+    add('⚠️ 支持的系统：iOS/iPadOS/tvOS 15.0+');
+    add('⚠️ 越狱过程设备会多次重启，不要断开 USB');
+    add('⚠️ 越狱后部分银行 App 可能无法使用');
+    add('');
+
+    final args = <String>[];
+    if (rootless) args.add('-l');
+    if (safeMode) args.add('-s');
+    if (verbose) args.add('-v');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      args,
+      onLine: add,
+      timeout: const Duration(minutes: 15),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 越狱完成');
+      add('');
+      add('📌 设备上会出现 palera1n loader 应用');
+      add('  打开它安装 Sileo / Zebra 包管理器');
+      return IosResult(true, '越狱完成', log);
+    }
+    return IosResult(false, '越狱失败（退出码 $code）', log);
+  }
+
+  /// 移除越狱
+  Future<IosResult> removeJailbreak({
+    bool confirmed = false,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!confirmed) {
+      return IosResult(false, '需要确认（confirmed=false）', log);
+    }
+
+    if (!await init()) return IosResult(false, 'palera1n 未就绪', log);
+    final exe = _exe('palera1n');
+    if (exe == null) return IosResult(false, 'palera1n 未找到', log);
+
+    add('══ 移除越狱');
+    add('');
+    add('ℹ️ 会清除 fakefs 和越狱环境，恢复原状');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['--force-revert'],
+      onLine: add,
+      timeout: const Duration(minutes: 10),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 越狱已移除');
+      return IosResult(true, '越狱已移除', log);
+    }
+    return IosResult(false, '移除失败', log);
+  }
+
+  /// 退出恢复模式
+  Future<IosResult> exitRecovery({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init()) return IosResult(false, 'palera1n 未就绪', log);
+    final exe = _exe('palera1n');
+    if (exe == null) return IosResult(false, 'palera1n 未找到', log);
+
+    add('══ 退出恢复模式');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['-n'],
+      onLine: add,
+      timeout: const Duration(seconds: 30),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 已退出恢复模式');
+      return IosResult(true, '已退出', log);
+    }
+    return IosResult(false, '退出失败', log);
+  }
+
+  /// 设备支持情况
+  static const List<Map<String, String>> supportedDevices = [
+    {'chip': 'A11', 'models': 'iPhone 8 / 8 Plus / X', 'support': '✅ 完全支持'},
+    {'chip': 'A10', 'models': 'iPhone 7 / 7 Plus', 'support': '✅ 完全支持'},
+    {'chip': 'A9', 'models': 'iPhone 6s / 6s Plus / SE 1', 'support': '✅ 完全支持'},
+    {'chip': 'A8', 'models': 'iPhone 6 / 6 Plus', 'support': '✅ 完全支持'},
+    {'chip': 'A12+', 'models': 'iPhone XS 及以后', 'support': '❌ 不支持（checkm8 漏洞已修复）'},
+  ];
+
 }
