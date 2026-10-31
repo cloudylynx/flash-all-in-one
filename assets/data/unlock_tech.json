@@ -1,0 +1,299 @@
+{
+  "_meta": {
+    "title": "Bootloader 解锁技术知识库",
+    "version": "1.0",
+    "sources": [
+      "Linuxoid-cn/Mi8G3-Unlocker (561★)",
+      "bkerler/mtkclient (1402★)",
+      "R0rt1z2/lkpatcher (406★)",
+      "kitsuned/PotatoNV (1701★)",
+      "zenfyrdev/bootloader-unlock-wall-of-shame (5613★)"
+    ],
+    "license_note": "技术路线为公开知识，代码实现遵循各自许可证"
+  },
+  "qualcomm_codenames": {
+    "8550": {
+      "name": "Snapdragon 8 Gen 2",
+      "cn": "骁龙 8 Gen 2"
+    },
+    "8635": {
+      "name": "Snapdragon 8s Gen 3 / 7+ Gen 3",
+      "cn": "骁龙 8s Gen 3 / 7+ Gen 3"
+    },
+    "8650": {
+      "name": "Snapdragon 8 Gen 3",
+      "cn": "骁龙 8 Gen 3"
+    },
+    "8735": {
+      "name": "Snapdragon 8s Gen 4",
+      "cn": "骁龙 8s Gen 4"
+    },
+    "8750": {
+      "name": "Snapdragon 8 Elite",
+      "cn": "骁龙 8 至尊版"
+    },
+    "_source": "Linuxoid-cn 系列解锁器的镜像命名（<代号>-Ennea.img）"
+  },
+  "methods": [
+    {
+      "id": "qualcomm_official",
+      "platform": "Qualcomm",
+      "name": "fastboot 官方解锁",
+      "risk": "低",
+      "requirements": [
+        "设备支持 OEM 解锁",
+        "已开启开发者选项中的 OEM 解锁"
+      ],
+      "steps": [
+        "adb reboot bootloader",
+        "fastboot flashing unlock（Android 6+）",
+        "或 fastboot oem unlock（老设备）",
+        "fastboot flashing unlock_critical（关键分区）"
+      ],
+      "note": "会清空数据。部分厂商需要先申请解锁资格（小米需账号绑定+等待期）。",
+      "integrated": true
+    },
+    {
+      "id": "qualcomm_abl_efi",
+      "platform": "Qualcomm",
+      "name": "ABL 阶段加载未签名 EFI",
+      "risk": "极高",
+      "requirements": [
+        "设备存在 ABL 未签名 EFI 加载漏洞",
+        "特定 SoC 平台（如 8650/8550/8750）",
+        "对应机型的 factoryImages 和 unlockGPT"
+      ],
+      "steps": [
+        "进入 fastboot 模式",
+        "加载 linuxloader_unlock.efi 到 ABL 阶段",
+        "EFI 覆写 RPMB 中的 is_unlocked 标志",
+        "写入 unlockGPT 分区表",
+        "清数据并重启"
+      ],
+      "note": "Linuxoid-cn 系列工具采用此路线。技术来源 @Littlenine。闭源实现，需对应机型资源。",
+      "integrated": false
+    },
+    {
+      "id": "mtk_seccfg",
+      "platform": "MediaTek",
+      "name": "seccfg 分区改写",
+      "risk": "中",
+      "requirements": [
+        "MTK 设备（BROM 可访问）",
+        "已装 MTK VCOM 驱动",
+        "设备存在 BROM 漏洞（kamakiri）"
+      ],
+      "steps": [
+        "设备进入 BROM 模式（关机+音量键+USB）",
+        "mtkclient 通过 kamakiri 漏洞进入 DA 模式",
+        "读取 seccfg 分区",
+        "改写 lock_state = 3 (LKS_UNLOCK)",
+        "重算 SHA256 并写回",
+        "重启"
+      ],
+      "seccfg_structure": {
+        "magic": "0x4D4D4D4D (MMMM)",
+        "fields": [
+          "magic",
+          "version",
+          "size",
+          "lock_state",
+          "dm_verity_state",
+          "sboot_runtime",
+          "endflag"
+        ],
+        "endflag": "0x45454545 (EEEE)",
+        "lock_states": {
+          "1": "LOCK",
+          "3": "UNLOCK",
+          "5": "VERIFIED"
+        },
+        "hwtypes": [
+          "SW",
+          "HW",
+          "HWXOR",
+          "V2",
+          "V3",
+          "V4"
+        ]
+      },
+      "note": "新版 HyperOS 设备 seccfg unlock 后重启可能回锁，需配合 RPMB 擦除。",
+      "integrated": true
+    },
+    {
+      "id": "mtk_rpmb_bypass",
+      "platform": "MediaTek",
+      "name": "RPMB magic 擦除（HyperOS 持久解锁）",
+      "risk": "中高",
+      "requirements": [
+        "已通过 seccfg 解锁",
+        "LK 分区可读写"
+      ],
+      "steps": [
+        "扫描 LK 分区找 RPMB magic 字符串",
+        "擦除该 magic",
+        "迫使 LK 回退到 seccfg 校验路径",
+        "重启验证持久性"
+      ],
+      "note": "解决 HyperOS/MIUI 14+ 上 seccfg unlock 重启仍锁定的问题。部分 preloader 每次启动会恢复 magic。",
+      "integrated": false
+    },
+    {
+      "id": "mtk_lk_patch",
+      "platform": "MediaTek",
+      "name": "LK 镜像补丁",
+      "risk": "中",
+      "requirements": [
+        "能读写 LK 分区",
+        "对应机型的 LK 镜像"
+      ],
+      "steps": [
+        "dump LK 分区",
+        "lkpatcher 分析安全策略",
+        "应用补丁分类（fastboot/dm_verity/orange_state/red_state）",
+        "重签名绕过证书校验",
+        "写回 LK 分区"
+      ],
+      "patch_categories": {
+        "fastboot": "解锁 fastboot 命令限制",
+        "dm_verity": "关闭 dm-verity 校验",
+        "orange_state": "消除橙灯警告",
+        "red_state": "消除红灯警告"
+      },
+      "patch_principle": "把特定字节序列替换为 00207047（ARM bx lr，直接返回）",
+      "note": "lkpatcher 由 R0rt1z2 开发，406★，GPL-3.0。",
+      "integrated": false
+    },
+    {
+      "id": "hisi_nvme",
+      "platform": "HiSilicon",
+      "name": "NVME 属性写入",
+      "risk": "极高",
+      "requirements": [
+        "华为麒麟 620/65x/95x/960",
+        "必须拆机短接主板测试点",
+        "对应板号的 bootloader 文件"
+      ],
+      "steps": [
+        "拆机短接测试点进入 fastboot",
+        "oem read_bsn 读板号",
+        "oem lock-state info 检查 FBLOCK",
+        "nve:FBLOCK=0 关闭 FBLOCK",
+        "nve:WVLOCK=<16位码> 写入解锁码",
+        "nve:USRKEY=SHA256(码) 写入校验值",
+        "重启验证"
+      ],
+      "note": "Kirin 710/710A/710F/810/970/980/985/990 及更新型号不支持。源自 PotatoNV 项目（1701★，GPL-3.0）。",
+      "integrated": true
+    },
+    {
+      "id": "moto_val_protocol",
+      "platform": "MediaTek (Motorola)",
+      "name": "Val Protocol",
+      "risk": "高",
+      "requirements": [
+        "摩托罗拉 MTK 机型",
+        "能拿到 LK 分区"
+      ],
+      "steps": [
+        "dump LK 分区",
+        "lk_static_analyzer 分析证书结构",
+        "lk_keygen 生成密钥",
+        "lk_auto_patch 打补丁",
+        "lk_repack_signed 重打包签名",
+        "写回并进入 fastboot 执行解锁"
+      ],
+      "note": "Maikyxd/val-protocol，96★，AGPL-3.0。crabcakes97/Valhalla 是其 GUI 封装。",
+      "integrated": false
+    },
+    {
+      "id": "cve_2026_43499",
+      "platform": "Android (通用)",
+      "name": "CVE-2026-43499 本地提权",
+      "risk": "高",
+      "requirements": [
+        "目标设备 boot.img",
+        "profile.json（物理地址偏移）",
+        "Android NDK + LLVM"
+      ],
+      "steps": [
+        "detect_offset.py 检测 profile",
+        "generate_target.py 生成 target.h",
+        "编译 preload.so",
+        "注入并提权",
+        "获得 root 后执行解锁操作"
+      ],
+      "note": "Linuxoid-cn/CVE-2026-43499-Poc-Analysis，115★。通用适配框架，不绑定单一机型。",
+      "integrated": false,
+      "detail": {
+        "原理": "从 boot.img 恢复内核符号表，计算关键结构体偏移，生成 preload.so 注入提权",
+        "核心技术": [
+          "recover_kallsyms —— 从无符号内核镜像恢复符号表（压缩 token 表解码）",
+          "extract_ikconfig —— 提取内核编译配置",
+          "parse_btf_at / locate_btf —— 解析 BTF 类型信息",
+          "locate_token_tables —— 定位 kallsyms 压缩 token 表",
+          "decode_kallsyms_names —— 解码符号名"
+        ],
+        "需要的地址": {
+          "p0_phys_offset": "memstart_addr（DRAM 起始，向下对齐 1 GiB）",
+          "p0_kernel_phys_load": "_text（Kernel code 起始 - 0x10000）"
+        },
+        "检测方法": "从 /proc/iomem 读 Kernel code 范围反推（需已 root 的同固件设备）",
+        "生成的关键宏": [
+          "SLIDE_NFULNL_LOGGER_OFF",
+          "SLIDE_LOGGERS_0_1_OFF",
+          "SLIDE_RANDOM_BOOT_ID_DATA_OFF",
+          "以及各内核符号的绝对地址（base + offset）"
+        ],
+        "编译产物": "source/build/bin/preload.so",
+        "依赖": [
+          "Python 3",
+          "LLVM/llvm-objdump",
+          "Android NDK r29",
+          "make"
+        ]
+      }
+    }
+  ],
+  "brand_policy_summary": {
+    "xiaomi": "需小米账号绑定 + 服务器端等待期（HyperOS 3 天 / MIUI 7 天），30 天内限 1 台、1 年限 4 台。HyperOS 2+ 要求更严。",
+    "huawei": "官方已停止解锁码发放。仅麒麟 620/65x/95x/960 可通过拆机短接方式解锁。",
+    "honor": "独立后部分机型恢复官方解锁，需申请。",
+    "samsung": "多数机型支持 fastboot oem unlock，但会触发 Knox 熔断（永久失去 Samsung Pay 等）。",
+    "google": "Pixel 全系支持 fastboot flashing unlock，最开放。",
+    "oneplus": "支持 fastboot oem unlock，但部分新机型需申请。",
+    "oppo": "官方不支持，需第三方漏洞。",
+    "vivo": "官方不支持，需第三方漏洞。",
+    "realme": "部分机型支持官方解锁（需申请深度测试）。",
+    "motorola": "多数机型支持官方解锁码申请。",
+    "nothing": "支持 fastboot flashing unlock。",
+    "fairphone": "完全支持，官方提供解锁指引。"
+  },
+  "mi8g3_structure": {
+    "_note": "Linuxoid-cn/Mi8G3-Unlocker Release 包结构（384 MB，闭源）",
+    "files": {
+      "8650-Ennea.img": "解锁流程镜像（8650 = 骁龙 8 Gen3）",
+      "toUnlock.bat": "一键解锁入口",
+      "8g3-unlock.bat": "主解锁流程",
+      "check-unlock.bat": "BL / 工程状态检测",
+      "adb-tool.bat": "ADB/Fastboot 调试入口"
+    },
+    "dirs": {
+      "unlockFolder/bin/<机型>/exploit": "机型专用漏洞利用程序",
+      "unlockFolder/bin/<机型>/su": "su 二进制",
+      "unlockFolder/factoryImages/<机型>/": "原厂镜像（factory images / ABL / GPT）",
+      "unlockFolder/unlockGPT/<机型>/": "解锁后的 GPT 分区表"
+    },
+    "supported_devices_8g3": [
+      "Xiaomi 14",
+      "Xiaomi 14 Pro",
+      "Xiaomi 14 Ultra",
+      "Redmi K70 Pro",
+      "Redmi K80",
+      "Xiaomi MIX Fold 4",
+      "Xiaomi MIX Flip"
+    ],
+    "tech_source": "@Littlenine (github.com/LittlenineEnnea)",
+    "verdict": "闭源工具，只有 README 公开。可学流程结构，不能直接集成。"
+  }
+}

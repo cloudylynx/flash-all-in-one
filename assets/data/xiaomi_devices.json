@@ -1,0 +1,756 @@
+{
+ "_source": "MlgmXyysd/Xiaomi-HyperOS-BootLoader-Bypass (4813★)",
+ "_note": "小米机型 BL 解锁状态。仅适用中国大陆销售机型。",
+ "_status_mean": {
+  "open": "可绕过限制解锁",
+  "blocked": "已被小米强制验证，仅授权账号可解",
+  "unsupported": "小米禁止解锁该机型",
+  "unknown": "服务器查不到策略"
+ },
+ "devices": [
+  {
+   "name": "Xiaomi 10",
+   "code": "umi",
+   "release": "2020-02-13",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 10S",
+   "code": "thyme",
+   "release": "2021-03-10",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 10 Pro",
+   "code": "cmi",
+   "release": "2020-02-13",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 10 Ultra",
+   "code": "cas",
+   "release": "2020-08-11",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 11 Lite",
+   "code": "lisa",
+   "release": "2021-12-09",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 11",
+   "code": "venus",
+   "release": "2020-12-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 11 Pro",
+   "code": "star",
+   "release": "2021-03-29",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 11 Ultra",
+   "code": "star",
+   "release": "2021-03-29",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 12X",
+   "code": "psyche",
+   "release": "2021-12-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 12",
+   "code": "cupid",
+   "release": "2021-12-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 12 Pro",
+   "code": "zeus",
+   "release": "2021-12-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 12 Pro Dimensity",
+   "code": "daumier",
+   "release": "2022-07-04",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 12S",
+   "code": "mayfly",
+   "release": "2022-07-04",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 12S Pro",
+   "code": "unicorn",
+   "release": "2022-07-04",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 12S Ultra",
+   "code": "thor",
+   "release": "2022-07-04",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 13",
+   "code": "fuxi",
+   "release": "2022-12-11",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 13 Pro",
+   "code": "nuwa",
+   "release": "2022-12-12",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 13 Ultra",
+   "code": "ishtar",
+   "release": "2023-04-18",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi 14",
+   "code": "houji",
+   "release": "2023-10-26",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Xiaomi 14 Pro",
+   "code": "shennong",
+   "release": "2023-10-26",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Xiaomi 14 Pro Ti Satellite",
+   "code": "shennong",
+   "release": "2024-02-22",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Xiaomi 14 Ultra",
+   "code": "aurora",
+   "release": "2024-02-22",
+   "os": "Xiaomi HyperOS",
+   "status": "unknown",
+   "status_text": "Unknown"
+  },
+  {
+   "name": "Xiaomi MIX 4",
+   "code": "odin",
+   "release": "2021-08-10",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi MIX Fold",
+   "code": "cetus",
+   "release": "2021-03-30",
+   "os": "MIUI Fold",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi MIX Fold 2",
+   "code": "zizhan",
+   "release": "2022-08-11",
+   "os": "MIUI Fold",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi MIX Fold 3",
+   "code": "babylon",
+   "release": "2023-08-14",
+   "os": "MIUI Fold",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi MIX Fold 4",
+   "code": "goku",
+   "release": "2024-07-19",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Xiaomi MIX Flip",
+   "code": "ruyi",
+   "release": "2024-07-19",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Xiaomi Civi",
+   "code": "mona",
+   "release": "2021-09-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Civi 1S",
+   "code": "zijin",
+   "release": "2022-04-21",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Civi 2",
+   "code": "ziyi",
+   "release": "2022-09-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Civi 3",
+   "code": "yuechu",
+   "release": "2023-05-25",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Civi 4 Pro",
+   "code": "chenfeng",
+   "release": "2024-03-21",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Xiaomi Pad 5",
+   "code": "nabu",
+   "release": "2021-08-10",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Pad 5 Pro",
+   "code": "elish",
+   "release": "2021-08-10",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Pad 5 Pro 5G",
+   "code": "enuma",
+   "release": "2021-08-10",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Pad 5 Pro 12.4",
+   "code": "dagu",
+   "release": "2022-08-11",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Pad 6",
+   "code": "pipa",
+   "release": "2023-04-18",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Pad 6 Pro",
+   "code": "liuqin",
+   "release": "2023-04-18",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Pad 6 Max",
+   "code": "yudi",
+   "release": "2023-08-14",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Xiaomi Pad 6S Pro",
+   "code": "sheng",
+   "release": "2024-02-22",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi 12C",
+   "code": "earth",
+   "release": "2022-12-31",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi 12",
+   "code": "sky",
+   "release": "2023-08-14",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi 12R",
+   "code": "sky",
+   "release": "2023-12-09",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12R",
+   "code": "sky",
+   "release": "2023-06-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi 13R",
+   "code": "air",
+   "release": "2023-12-08",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi 13C",
+   "code": "air",
+   "release": "2023-12-29",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi 14R",
+   "code": "flame",
+   "release": "2024-09-18",
+   "os": "Xiaomi HyperOS",
+   "status": "unknown",
+   "status_text": "Unknown"
+  },
+  {
+   "name": "Redmi Note 11R",
+   "code": "light",
+   "release": "2022-09-29",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 11E",
+   "code": "light",
+   "release": "2022-03-01",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 11E Pro",
+   "code": "veux",
+   "release": "2022-03-01",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 11",
+   "code": "evergo",
+   "release": "2021-10-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 11 Pro",
+   "code": "pissarro",
+   "release": "2021-10-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 11 Pro+",
+   "code": "pissarro",
+   "release": "2021-10-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 11T Pro",
+   "code": "xaga",
+   "release": "2022-05-24",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 11T Pro+",
+   "code": "xaga",
+   "release": "2022-05-24",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12",
+   "code": "sunstone",
+   "release": "2022-10-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12R Pro",
+   "code": "sunstone",
+   "release": "2023-04-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12 Pro",
+   "code": "ruby",
+   "release": "2022-10-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12 Pro+",
+   "code": "ruby",
+   "release": "2022-10-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12 Pro Speed",
+   "code": "redwood",
+   "release": "2022-12-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12 Turbo",
+   "code": "marble",
+   "release": "2023-03-28",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 12T Pro",
+   "code": "pearl",
+   "release": "2023-05-30",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Note 13R",
+   "code": "breeze",
+   "release": "2024-05-30",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi Note 13",
+   "code": "gold",
+   "release": "2023-09-21",
+   "os": "MIUI",
+   "status": "unsupported",
+   "status_text": "Unsupported"
+  },
+  {
+   "name": "Redmi Note 13R Pro",
+   "code": "gold",
+   "release": "2023-11-20",
+   "os": "MIUI",
+   "status": "unsupported",
+   "status_text": "Unsupported"
+  },
+  {
+   "name": "Redmi Note 13 Pro",
+   "code": "garnet",
+   "release": "2023-09-21",
+   "os": "MIUI",
+   "status": "unsupported",
+   "status_text": "Unsupported"
+  },
+  {
+   "name": "Redmi Note 13 Pro+",
+   "code": "zircon",
+   "release": "2023-09-21",
+   "os": "MIUI",
+   "status": "unsupported",
+   "status_text": "Unsupported"
+  },
+  {
+   "name": "Redmi Turbo 3",
+   "code": "peridot",
+   "release": "2024-04-10",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi Note 14",
+   "code": "beryl",
+   "release": "2024-09-26",
+   "os": "Xiaomi HyperOS",
+   "status": "unknown",
+   "status_text": "Unknown"
+  },
+  {
+   "name": "Redmi Note 14 Pro",
+   "code": "malachite",
+   "release": "2024-09-26",
+   "os": "Xiaomi HyperOS",
+   "status": "unknown",
+   "status_text": "Unknown"
+  },
+  {
+   "name": "Redmi Note 14 Pro+",
+   "code": "amethyst",
+   "release": "2024-09-26",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi K40 Gaming",
+   "code": "ares",
+   "release": "2021-04-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K40",
+   "code": "alioth",
+   "release": "2021-02-25",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K40S",
+   "code": "munch",
+   "release": "2022-03-17",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K40 Pro",
+   "code": "haydn",
+   "release": "2021-02-25",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K40 Pro+",
+   "code": "haydn",
+   "release": "2021-02-25",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K50 Gaming",
+   "code": "ingres",
+   "release": "2022-02-16",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K50",
+   "code": "rubens",
+   "release": "2022-03-17",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K50 Pro",
+   "code": "matisse",
+   "release": "2022-03-17",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K50 Ultra",
+   "code": "diting",
+   "release": "2022-08-11",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K60E",
+   "code": "rembrandt",
+   "release": "2022-12-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K60",
+   "code": "mondrian",
+   "release": "2022-12-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K60 Pro",
+   "code": "socrates",
+   "release": "2022-12-27",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K60 Ultra",
+   "code": "corot",
+   "release": "2023-08-14",
+   "os": "MIUI",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi K70E",
+   "code": "duchamp",
+   "release": "2023-11-29",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi K70",
+   "code": "vermeer",
+   "release": "2023-11-29",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi K70 Pro",
+   "code": "manet",
+   "release": "2023-11-29",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi K70 Ultra",
+   "code": "rothko",
+   "release": "2024-07-19",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi Pad SE",
+   "code": "xun",
+   "release": "2023-09-21",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Pad",
+   "code": "yunluo",
+   "release": "2022-10-27",
+   "os": "MIUI Pad",
+   "status": "open",
+   "status_text": "Opening"
+  },
+  {
+   "name": "Redmi Pad Pro",
+   "code": "dizi",
+   "release": "2024-04-10",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  },
+  {
+   "name": "Redmi Pad Pro 5G",
+   "code": "ruan",
+   "release": "2024-04-10",
+   "os": "Xiaomi HyperOS",
+   "status": "blocked",
+   "status_text": "Blocked"
+  }
+ ]
+}
