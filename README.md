@@ -151,10 +151,24 @@
 从 [Releases](https://github.com/cloudylynx/flash-all-in-one/releases) 下载最新版：
 
 - **Windows**：`FlashAllInOne-v1.0.0-win64.zip`，解压后运行 `flashallinone.exe`
-- **Linux**：`FlashAllInOne-v1.1.0-linux-x64.tar.gz`（211 MB，含全部内置工具）
+- **Linux**：`FlashAllInOne-v1.7.0-linux-x64.tar.gz`（382.6 MB，含全部内置工具）
 
-> **v1.1.0 更新**：新增 OTA 造包/重签、7 个 Root 管理器、展锐高级维护
-> Linux 包可直接从 [Releases](https://github.com/cloudylynx/flash-all-in-one/releases/tag/v1.1.0) 下载
+> **v1.7.0 更新**：新增 iOS 设备管理 + 越狱（palera1n / Dopamine）、
+> TTL 串口、nRF52、JTAG，智能穿戴/开发板扩到 8 个 Tab
+
+**Linux 包分卷说明**（因单文件过大，Release 里拆成 4 个分卷）：
+
+```bash
+# 下载全部 4 个分卷后合并
+cat FlashAllInOne-v1.7.0-linux-x64.tar.gz.part0 \
+    FlashAllInOne-v1.7.0-linux-x64.tar.gz.p1_0 \
+    FlashAllInOne-v1.7.0-linux-x64.tar.gz.p1_1 \
+    FlashAllInOne-v1.7.0-linux-x64.tar.gz.part2 \
+    > FlashAllInOne-v1.7.0-linux-x64.tar.gz
+
+tar xzf FlashAllInOne-v1.7.0-linux-x64.tar.gz
+./flashallinone
+```
 
 ### 从源码构建
 
