@@ -152,6 +152,12 @@ class SideNav extends StatefulWidget {
         group: '高级',
         advanced: true),
     NavItem(
+        id: 'recovery',
+        label: '数据恢复/分区修复',
+        icon: Icons.healing,
+        group: '高级',
+        advanced: true),
+    NavItem(
         id: 'partitions',
         label: '分区读写',
         icon: Icons.grid_view,

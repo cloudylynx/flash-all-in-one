@@ -454,4 +454,210 @@ class OtaService {
 
     return OtaResult(code == 0, code == 0 ? '已读取' : '读取失败', log);
   }
+
+  /// FEC 校验与修复（dm-verity 前向纠错）
+  ///
+  /// 场景：system.img 位翻转导致 dm-verity 校验失败、设备无法启动。
+  /// 如果有配套的 .fec 文件，可以用它把损坏的镜像修回来。
+  ///
+  /// 这是 avbroot 独有的能力，其他工具都做不到。
+  Future<OtaResult> fecVerify({
+    required String imagePath,
+    required String fecPath,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init() || _avbrootPath == null) {
+      return OtaResult(false, 'avbroot 未就绪', log);
+    }
+
+    add('══ FEC 校验');
+    add('  镜像: ${p.basename(imagePath)}');
+    add('  FEC: ${p.basename(fecPath)}');
+    add('');
+    add('ℹ️ 检查镜像是否有位翻转错误');
+
+    final code = await ProcessRunner.stream(
+      _avbrootPath!,
+      ['fec', 'verify', '-i', imagePath, '-f', fecPath],
+      onLine: add,
+      timeout: const Duration(minutes: 30),
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 无错误');
+      return OtaResult(true, 'FEC 校验通过', log);
+    }
+    add('');
+    add('⚠️ 检测到错误，可尝试修复（fec verify --repair）');
+    return OtaResult(false, 'FEC 校验失败', log);
+  }
+
+  /// FEC 修复损坏的镜像
+  Future<OtaResult> fecRepair({
+    required String imagePath,
+    required String fecPath,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init() || _avbrootPath == null) {
+      return OtaResult(false, 'avbroot 未就绪', log);
+    }
+
+    add('══ FEC 修复');
+    add('  镜像: ${p.basename(imagePath)}');
+    add('  FEC: ${p.basename(fecPath)}');
+    add('');
+    add('⚠️ 会修改镜像文件，建议先备份');
+
+    final code = await ProcessRunner.stream(
+      _avbrootPath!,
+      ['fec', 'verify', '-i', imagePath, '-f', fecPath, '--repair'],
+      onLine: add,
+      timeout: const Duration(minutes: 60),
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 修复完成');
+      return OtaResult(true, 'FEC 修复完成', log);
+    }
+    return OtaResult(false, '修复失败', log);
+  }
+
+  /// super.img (LP) 解包
+  Future<OtaResult> lpUnpack({
+    required String superImage,
+    required String outputDir,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init() || _avbrootPath == null) {
+      return OtaResult(false, 'avbroot 未就绪', log);
+    }
+
+    Directory(outputDir).createSync(recursive: true);
+
+    add('══ super.img 解包');
+    add('  源: ${p.basename(superImage)}');
+    add('  输出: $outputDir');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      _avbrootPath!,
+      [
+        'lp', 'unpack',
+        '-i', superImage,
+        '--output-images', outputDir,
+        '--output-info', p.join(outputDir, 'lp.toml'),
+      ],
+      onLine: add,
+      timeout: const Duration(minutes: 30),
+    );
+
+    if (code == 0) {
+      var count = 0;
+      try {
+        count = Directory(outputDir)
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.img'))
+            .length;
+      } catch (_) {}
+      add('');
+      add('✅ 解出 $count 个分区镜像');
+      return OtaResult(true, '解出 $count 个分区', log);
+    }
+    return OtaResult(false, '解包失败', log);
+  }
+
+  /// super.img (LP) 重打包
+  Future<OtaResult> lpRepack({
+    required String infoFile,
+    required String imageDir,
+    required String outputPath,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init() || _avbrootPath == null) {
+      return OtaResult(false, 'avbroot 未就绪', log);
+    }
+
+    add('══ super.img 重打包');
+    add('  配置: ${p.basename(infoFile)}');
+    add('  镜像目录: $imageDir');
+    add('  输出: ${p.basename(outputPath)}');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      _avbrootPath!,
+      [
+        'lp', 'pack',
+        '--info', infoFile,
+        '--images', imageDir,
+        '-o', outputPath,
+      ],
+      onLine: add,
+      timeout: const Duration(minutes: 30),
+    );
+
+    if (code == 0 && File(outputPath).existsSync()) {
+      final size = File(outputPath).lengthSync();
+      add('');
+      add('✅ 生成: ${(size / 1024 / 1024).toStringAsFixed(1)} MB');
+      return OtaResult(true, 'super.img 已生成', log);
+    }
+    return OtaResult(false, '重打包失败', log);
+  }
+
+  /// super.img 元数据
+  Future<OtaResult> lpInfo({
+    required String superImage,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!await init() || _avbrootPath == null) {
+      return OtaResult(false, 'avbroot 未就绪', log);
+    }
+
+    add('══ super.img 信息');
+    add('  文件: ${p.basename(superImage)}');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      _avbrootPath!,
+      ['lp', 'info', '-i', superImage],
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+    );
+
+    return OtaResult(code == 0, code == 0 ? '已读取' : '读取失败', log);
+  }
+
 }

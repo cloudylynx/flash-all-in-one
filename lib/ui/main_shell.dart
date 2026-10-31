@@ -23,6 +23,7 @@ import 'pages/overview_page.dart';
 import 'pages/partitions_page.dart';
 import 'pages/perfetto_page.dart';
 import 'pages/imgtool_page.dart';
+import 'pages/recovery_page.dart';
 import 'pages/root_page.dart';
 import 'pages/scripts_page.dart';
 import 'pages/device_screen_page.dart';
@@ -170,6 +171,8 @@ class _MainShellState extends State<MainShell> {
         return const ImgtoolPage();
       case 'ota':
         return const OtaPage();
+      case 'recovery':
+        return const RecoveryPage();
       case 'files':
         return const FilesPage();
       case 'fastboot':
