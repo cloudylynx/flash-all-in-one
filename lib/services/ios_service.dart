@@ -63,8 +63,30 @@ class IosService {
   Future<bool> init() async {
     if (_available) return true;
 
-    // 只支持 Linux（Windows 需要单独编译）
-    if (Platform.isWindows) return false;
+    // Windows：只支持 gaster + openra1n（原生 checkm8）
+    if (Platform.isWindows) {
+      for (final t in ['gaster.exe', 'openra1n.exe']) {
+        final path = await ToolExtractor.extractFile(
+          assetPath: 'assets/tools/windows/ios/$t',
+          subDir: 'ios',
+          fileName: t,
+          executable: true,
+        );
+        if (path != null && _dir == null) {
+          _dir = File(path).parent.path;
+        }
+      }
+      // 依赖 DLL
+      for (final dll in ['libusb-1.0.dll', 'libusbK.dll']) {
+        await ToolExtractor.extractFile(
+          assetPath: 'assets/tools/windows/ios/$dll',
+          subDir: 'ios',
+          fileName: dll,
+        );
+      }
+      _available = _dir != null;
+      return _available;
+    }
 
     const tools = [
       'idevicerestore',
@@ -810,5 +832,195 @@ class IosService {
     {'chip': 'A8', 'models': 'iPhone 6 / 6 Plus', 'support': '✅ 完全支持'},
     {'chip': 'A12+', 'models': 'iPhone XS 及以后', 'support': '❌ 不支持（checkm8 漏洞已修复）'},
   ];
+
+
+  // ═══════════════════════════════════════════════
+  // Dopamine（iOS 15-26，A12-A16）
+  // ═══════════════════════════════════════════════
+
+  /// Dopamine 支持的版本范围
+  static const String dopamineRange = 'iOS 15.0 - 26.0.1';
+
+  /// Dopamine 支持的芯片
+  static const List<String> dopamineChips = [
+    'A12', 'A13', 'A14', 'A15', 'A16',
+  ];
+
+  /// 安装 Dopamine 到设备
+  ///
+  /// Dopamine 是 semi-untethered 越狱，需要先安装到设备上运行。
+  /// 安装方式：用 ideviceinstaller 或者 Sideloadly/AltStore 侧载。
+  Future<IosResult> installDopamine({
+    required String udid,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (Platform.isWindows) {
+      return IosResult(false, 'Dopamine 安装需要 ideviceinstaller（仅 Linux）', log);
+    }
+
+    if (!await init()) return IosResult(false, 'iOS 工具未就绪', log);
+
+    add('══ 安装 Dopamine');
+    add('  UDID: $udid');
+    add('');
+    add('ℹ️ Dopamine 是 semi-untethered 越狱：');
+    add('  · 需要先安装到设备上');
+    add('  · 然后在设备上打开 App 执行越狱');
+    add('  · 重启后需要重新运行 App');
+    add('');
+    add('⚠️ 侧载需要签名（免费 Apple ID 7 天有效）');
+    add('');
+
+    // 提取 IPA
+    final ipaPath = await ToolExtractor.extractFile(
+      assetPath: 'assets/ipa/Dopamine.ipa',
+      subDir: 'ipa',
+      fileName: 'Dopamine.ipa',
+    );
+
+    if (ipaPath == null) {
+      add('❌ IPA 提取失败');
+      return IosResult(false, 'IPA 提取失败', log);
+    }
+
+    add('  IPA: ${p.basename(ipaPath)}');
+    add('  大小: ${(File(ipaPath).lengthSync() / 1024 / 1024).toStringAsFixed(1)} MB');
+    add('');
+
+    // 尝试用 ideviceinstaller（如果存在）
+    final installer = File('/usr/bin/ideviceinstaller');
+    if (!installer.existsSync()) {
+      add('⚠️ ideviceinstaller 未安装');
+      add('');
+      add('请手动安装：');
+      add('  sudo apt install ideviceinstaller');
+      add('');
+      add('或使用侧载工具：');
+      add('  · Sideloadly（Windows/macOS）');
+      add('  · AltStore（需要 AltServer）');
+      add('  · TrollStore（iOS 14-17.0，无需签名）');
+      return IosResult(false, 'ideviceinstaller 未安装', log);
+    }
+
+    add('── 安装中…');
+    final code = await ProcessRunner.stream(
+      'ideviceinstaller',
+      ['-u', udid, '-i', ipaPath],
+      onLine: add,
+      timeout: const Duration(minutes: 5),
+      environment: _env(),
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ Dopamine 已安装');
+      add('');
+      add('📌 下一步：');
+      add('  1. 在设备上找到「Dopamine」App');
+      add('  2. 打开它，点「Jailbreak」');
+      add('  3. 等待完成（设备会重启）');
+      return IosResult(true, 'Dopamine 已安装', log);
+    }
+    return IosResult(false, '安装失败', log);
+  }
+
+  // ═══════════════════════════════════════════════
+  // Windows 越狱（gaster + openra1n）
+  // ═══════════════════════════════════════════════
+
+  /// Windows 下把设备置入 pwned DFU 模式（gaster checkm8）
+  Future<IosResult> windowsPwnDfu({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!Platform.isWindows) {
+      return IosResult(false, '此功能仅 Windows 可用', log);
+    }
+
+    if (!await init()) return IosResult(false, 'iOS 工具未就绪', log);
+    final exe = _exe('gaster.exe');
+    if (exe == null) return IosResult(false, 'gaster.exe 未找到', log);
+
+    add('══ Windows checkm8 利用（gaster）');
+    add('');
+    add('ℹ️ 会把设备置入 pwned DFU 模式');
+    add('  这是 palera1n 的第一步');
+    add('');
+    add('⚠️ 需要设备已进入 DFU 模式');
+    add('⚠️ 需要先装 libusb 驱动（用 zadig）');
+    add('');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      ['pwn'],
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ 设备已 pwned（pwned DFU 模式）');
+      add('');
+      add('📌 下一步：');
+      add('  用 WSL 里的 palera1n 继续（-i fake-checkra1n.sh）');
+      add('  或运行 openra1n.exe 加载 PongoOS');
+      return IosResult(true, '已 pwned', log);
+    }
+    return IosResult(false, 'pwn 失败', log);
+  }
+
+  /// Windows 下加载 PongoOS（openra1n）
+  Future<IosResult> windowsLoadPongo({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!Platform.isWindows) {
+      return IosResult(false, '此功能仅 Windows 可用', log);
+    }
+
+    if (!await init()) return IosResult(false, 'iOS 工具未就绪', log);
+    final exe = _exe('openra1n.exe');
+    if (exe == null) return IosResult(false, 'openra1n.exe 未找到', log);
+
+    add('══ 加载 PongoOS（openra1n）');
+    add('');
+    add('ℹ️ 会向 pwned DFU 设备上传 PongoOS');
+    add('  这是越狱的核心步骤');
+
+    final code = await ProcessRunner.stream(
+      exe,
+      [],
+      onLine: add,
+      timeout: const Duration(minutes: 3),
+      workingDirectory: _dir,
+    );
+
+    if (code == 0) {
+      add('');
+      add('✅ PongoOS 已加载');
+      return IosResult(true, 'PongoOS 已加载', log);
+    }
+    return IosResult(false, '加载失败', log);
+  }
+
+  /// Windows 是否可用
+  bool get windowsJailbreakAvailable => Platform.isWindows;
 
 }

@@ -76,21 +76,6 @@ class _IosPageState extends State<IosPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isWindows) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40),
-          child: Text(
-            'iOS 工具目前仅支持 Linux\n\n'
-            'Windows 用户请用 iTunes 或 3uTools',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 12, color: AppTheme.textMuted, height: 1.7),
-          ),
-        ),
-      );
-    }
-
     return Row(
       children: [
         Expanded(
@@ -456,6 +441,84 @@ class _IosPageState extends State<IosPage> {
                 ),
                 const SizedBox(height: 14),
 
+                // ═══ Dopamine（iOS 15-26，A12-A16）═══
+                AppCard(
+                  title: 'Dopamine 越狱',
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('iOS 15-26',
+                        style: TextStyle(
+                            fontSize: 9, color: AppTheme.accent)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Dopamine 3.0.12（7147★，MIT）\n\n'
+                        'semi-untethered 越狱，支持 A12-A16\n'
+                        '（iPhone XS ~ iPhone 14 系列）\n\n'
+                        '⚠️ 需要先安装到设备上，在设备上运行',
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.textSecondary,
+                            height: 1.7),
+                      ),
+                      const SizedBox(height: 12),
+                      _action(Icons.install_mobile, '安装 Dopamine 到设备',
+                          '推送 IPA 并安装',
+                          () => _run(() async {
+                                final udid = await _pickUdid();
+                                if (udid == null) {
+                                  return IosResult(false, '未选择设备', []);
+                                }
+                                return IosService.instance.installDopamine(
+                                  udid: udid,
+                                  onLine: _addLog,
+                                );
+                              })),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // ═══ Windows 越狱 ═══
+                if (Platform.isWindows)
+                  AppCard(
+                    title: 'Windows 越狱（checkm8）',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Windows 原生越狱链路：\n\n'
+                          '  gaster.exe   → 置入 pwned DFU\n'
+                          '  openra1n.exe → 加载 PongoOS\n\n'
+                          '⚠️ 需要先用 zadig 装 libusb 驱动\n'
+                          '⚠️ 只支持 A8-A11（checkm8 漏洞）',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                              height: 1.7),
+                        ),
+                        const SizedBox(height: 12),
+                        _action(Icons.flash_on, '置入 pwned DFU',
+                            'gaster pwn',
+                            () => _run(() => IosService.instance
+                                .windowsPwnDfu(onLine: _addLog))),
+                        const Divider(height: 16),
+                        _action(Icons.upload, '加载 PongoOS',
+                            'openra1n',
+                            () => _run(() => IosService.instance
+                                .windowsLoadPongo(onLine: _addLog))),
+                      ],
+                    ),
+                  ),
+                if (Platform.isWindows) const SizedBox(height: 14),
+
                 // 其他越狱工具（外链）
                 AppCard(
                   title: '其他越狱工具',
@@ -583,6 +646,30 @@ class _IosPageState extends State<IosPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<String?> _pickUdid() async {
+    final devices = await IosService.instance.listDevices();
+    if (devices.isEmpty) {
+      if (!mounted) return null;
+      _addLog('❌ 未检测到 iOS 设备');
+      return null;
+    }
+    if (devices.length == 1) return devices.first.udid;
+    if (!mounted) return null;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择设备'),
+        children: [
+          for (final d in devices)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, d.udid),
+              child: Text('${d.name} (${d.model})'),
+            ),
+        ],
+      ),
     );
   }
 

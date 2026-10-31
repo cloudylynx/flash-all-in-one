@@ -4,7 +4,7 @@
 
 # Flash All In One
 
-**全宇宙中功能最全的安卓刷机工具箱**
+**全宇宙中功能最全的刷机工具箱**
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue)]()
@@ -73,6 +73,52 @@
 | EDL 深度刷机 | 高通 9008，支持 qdl（跨平台）和 fh_loader |
 | 镜像工具 | vbmeta 校验开关、EROFS/F2FS 解包打包、sparse 转换 |
 | 分区读写 | 导出、刷入、擦除任意分区 |
+
+---
+
+## iOS 与开发板
+
+### iOS 设备管理
+
+基于 libimobiledevice（8300★）+ idevicerestore（2001★）：
+
+- 读设备信息 / IPSW 刷写（升级或全新）/ 进恢复模式
+- 备份 / 系统日志 / 截图 / 诊断
+
+### iOS 越狱
+
+**palera1n 2.4**（6613★，MIT）—— checkm8 漏洞
+
+| 芯片 | 机型 | 支持 |
+|---|---|---|
+| A11 | iPhone 8 / 8 Plus / X | ✅ |
+| A10 | iPhone 7 / 7 Plus | ✅ |
+| A9 | iPhone 6s / 6s Plus / SE 1 | ✅ |
+| A8 | iPhone 6 / 6 Plus | ✅ |
+| A12+ | iPhone XS 及以后 | ❌ |
+
+**Dopamine 3.0.12**（7147★，MIT）—— iOS 15-26，A12-A16
+
+**Windows 原生**：gaster（pwned DFU）+ openra1n（PongoOS）
+
+### 智能穿戴 / 开发板
+
+8 个 Tab，覆盖 12 类平台：
+
+| Tab | 工具 | 用途 |
+|---|---|---|
+| ESP32 | esptool 5.6.0 | 15 种芯片，ESP8266/ESP32 全系 |
+| Pico | picotool 2.3.1 | RP2040 / RP2350 |
+| STM32 | stlink 1.9.0 | 81 个芯片型号 |
+| nRF52 | nrfutil 6.1.7 | DFU 刷写（串口/BLE/Thread/Zigbee/ANT） |
+| JTAG | openocd 0.12.0 | 49 接口 × 309 芯片，最后的救砖手段 |
+| 树莓派 | rpiboot | USB Boot 模式 |
+| Arduino | arduino-cli 1.5.1 | 编译上传 |
+| 小米穿戴 | AstroBox-NG | Vela 系统（外链） |
+
+### TTL / 串口
+
+**tio 3.9**（3210★）—— 自动重连、时间戳、hex 模式、DTR/RTS 时序
 
 ---
 

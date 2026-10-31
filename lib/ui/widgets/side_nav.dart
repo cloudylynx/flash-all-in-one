@@ -176,7 +176,12 @@ class SideNav extends StatefulWidget {
         id: 'ios',
         label: 'iOS 设备管理',
         icon: Icons.phone_iphone,
-        group: '穿戴'),
+        group: 'iOS'),
+    NavItem(
+        id: 'jailbreak',
+        label: 'iOS 越狱',
+        icon: Icons.lock_open,
+        group: 'iOS'),
     NavItem(
         id: 'serial',
         label: 'TTL / 串口',
@@ -360,17 +365,36 @@ class _SideNavState extends State<SideNav> {
                     ],
                   ),
                 ),
-                  // ═══ 智能穿戴 / 开发板 + 设置（不在危险框内）═══
-                  const SizedBox(height: 10),
-                  _groupHeader('调试 / 开发板'),
-                  for (final item
-                      in SideNav.extraItems.where(_matches))
-                    _NavTile(
-                      item: item,
-                      selected: widget.selected == item.id,
-                      onTap: () => widget.onSelect(item.id),
-                    ),
-              ],
+                  // ═══ iOS 组（独立）═══
+                  if (SideNav.extraItems
+                      .where((i) => i.group == 'iOS' && _matches(i))
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _groupHeader('iOS'),
+                    for (final item in SideNav.extraItems
+                        .where((i) => i.group == 'iOS' && _matches(i)))
+                      _NavTile(
+                        item: item,
+                        selected: widget.selected == item.id,
+                        onTap: () => widget.onSelect(item.id),
+                      ),
+                  ],
+
+                  // ═══ 调试 / 开发板组 ═══
+                  if (SideNav.extraItems
+                      .where((i) => i.group == '穿戴' && _matches(i))
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _groupHeader('调试 / 开发板'),
+                    for (final item in SideNav.extraItems
+                        .where((i) => i.group == '穿戴' && _matches(i)))
+                      _NavTile(
+                        item: item,
+                        selected: widget.selected == item.id,
+                        onTap: () => widget.onSelect(item.id),
+                      ),
+                  ],
+                ],
             ),
           ),
 

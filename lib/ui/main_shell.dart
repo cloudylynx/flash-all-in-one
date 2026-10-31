@@ -17,6 +17,7 @@ import 'pages/fastboot_page.dart';
 import 'pages/files_page.dart';
 import 'pages/install_page.dart';
 import 'pages/ios_page.dart';
+import 'pages/jailbreak_page.dart';
 import 'pages/logcat_page.dart';
 import 'pages/mtk_page.dart';
 import 'pages/ota_page.dart';
@@ -185,6 +186,8 @@ class _MainShellState extends State<MainShell> {
         return const SerialPage();
       case 'ios':
         return const IosPage();
+      case 'jailbreak':
+        return const JailbreakPage();
       case 'files':
         return const FilesPage();
       case 'fastboot':
