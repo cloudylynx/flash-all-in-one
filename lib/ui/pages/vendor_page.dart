@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../services/heimdall_service.dart';
 import '../../services/payload_service.dart';
@@ -23,7 +25,7 @@ class VendorPage extends StatefulWidget {
 }
 
 class _VendorPageState extends State<VendorPage> {
-  String _tab = 'samsung';
+  String _tab = Platform.environment['GAOJI_VENDOR_TAB'] ?? 'samsung';
   bool _busy = false;
   String? _heimdallVersion;
   bool _heimdallReady = false;
@@ -49,6 +51,7 @@ class _VendorPageState extends State<VendorPage> {
   String? _fdl1Path;
   String? _fdl2Path;
   final _sprdPartController = TextEditingController();
+  String? _sprdImageDir;
 
   final List<String> _log = [];
   final _scrollController = ScrollController();
@@ -1063,6 +1066,243 @@ class _VendorPageState extends State<VendorPage> {
 
 
   // ═══ 紫光展锐 ═══
+
+  /// 展锐操作行
+  Widget _sprdAction({
+    required IconData icon,
+    required String label,
+    required String desc,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    final color = danger ? AppTheme.danger : AppTheme.primary;
+    return InkWell(
+      onTap: _busy ? null : onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: danger
+                              ? AppTheme.danger
+                              : AppTheme.textPrimary)),
+                  Text(desc,
+                      style: const TextStyle(
+                          fontSize: 10.5, color: AppTheme.textMuted)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                size: 16, color: AppTheme.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sprdReadPartTable() async {
+    final save = await FilePicker.platform.saveFile(
+      dialogTitle: '保存分区表',
+      fileName: 'partition_table.xml',
+    );
+    if (save == null) return;
+
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+    final r = await SprdService.instance.readPartitionTable(
+      outputPath: save,
+      onLine: _addLog,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+  }
+
+  Future<void> _sprdReadInfo() async {
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+    final r = await SprdService.instance.readDeviceInfo(onLine: _addLog);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+  }
+
+  Future<void> _sprdPickAndRestore() async {
+    final dir = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择包含 .img 的目录',
+    );
+    if (dir == null) return;
+
+    setState(() => _sprdImageDir = dir);
+
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+
+    // 第一次调用：只扫描列出，不执行
+    final preview = await SprdService.instance.restoreFromFolder(
+      imageDir: dir,
+      confirmed: false,
+      onLine: _addLog,
+    );
+
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    if (!preview.ok) {
+      _addLog('⚠️ ${preview.message}');
+      // 弹确认框
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('确认批量刷入'),
+          content: SingleChildScrollView(
+            child: Text(
+              '即将把 ${dir.split(Platform.pathSeparator).last} 里的所有 .img 刷入设备。\n\n'
+              '⚠️ 这是危险操作：\n'
+              '  · 刷错分区可能导致设备无法启动\n'
+              '  · 请确认目录里的镜像与设备型号匹配\n\n'
+              '分区列表见右侧输出面板。',
+              style: const TextStyle(fontSize: 12, height: 1.6),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+              ),
+              child: const Text('确认刷入'),
+            ),
+          ],
+        ),
+      );
+
+      if (ok != true || !mounted) return;
+
+      setState(() => _busy = true);
+      final r = await SprdService.instance.restoreFromFolder(
+        imageDir: dir,
+        confirmed: true,
+        onLine: _addLog,
+      );
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+    }
+  }
+
+  Future<void> _sprdDisableAvb() async {
+    // 强确认：必须输入短语
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⚠️ 关闭 AVB / dm-verity'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '关闭后设备将失去系统完整性保护：',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '· 银行 App / Google Pay 无法使用\n'
+                '· 微信/支付宝支付可能失败\n'
+                '· Netflix HD 等 DRM 内容无法播放\n'
+                '· 反作弊游戏（原神/PUBG）可能拒绝运行\n'
+                '· 恶意软件可随意修改系统',
+                style: TextStyle(fontSize: 11.5, height: 1.7),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: const Text(
+                  '安全设计：执行前会自动备份 trustos 分区。\n'
+                  '如果备份失败，操作会立即中止。',
+                  style: TextStyle(fontSize: 11, height: 1.5),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('请输入「我知道风险」确认：',
+                  style: TextStyle(fontSize: 11.5)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: '我知道风险',
+                  isDense: true,
+                ),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim() == '我知道风险') {
+                Navigator.pop(ctx, true);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+            ),
+            child: const Text('确认执行'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    final backupDir = p.join(
+      (await getApplicationSupportDirectory()).path,
+      'sprd-backup',
+    );
+
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+    final r = await SprdService.instance.disableAvbSafely(
+      backupDir: backupDir,
+      confirmed: true,
+      onLine: _addLog,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+  }
+
   Widget _buildSprd() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1142,6 +1382,57 @@ class _VendorPageState extends State<VendorPage> {
           ),
         ),
         const SizedBox(height: 14),
+
+        // ═══ 借鉴 sfd_tool 的高级功能 ═══
+        AppCard(
+          title: '高级维护',
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text('借鉴 sfd_tool',
+                style: TextStyle(fontSize: 9, color: AppTheme.accent)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sprdAction(
+                icon: Icons.table_chart,
+                label: '读取分区表',
+                desc: '导出设备当前分区表到文件',
+                onTap: _sprdReadPartTable,
+              ),
+              const Divider(height: 16),
+              _sprdAction(
+                icon: Icons.memory,
+                label: '读取设备信息',
+                desc: '芯片型号 / Flash 类型 / UID / eMMC CID',
+                onTap: _sprdReadInfo,
+              ),
+              const Divider(height: 16),
+              _sprdAction(
+                icon: Icons.folder_copy,
+                label: '批量恢复分区',
+                desc: _sprdImageDir == null
+                    ? '从文件夹一次性刷入多个分区'
+                    : '已选: ${_sprdImageDir!.split(Platform.pathSeparator).last}',
+                onTap: _sprdPickAndRestore,
+              ),
+              const Divider(height: 16),
+              _sprdAction(
+                icon: Icons.shield_outlined,
+                label: '关闭 AVB / dm-verity',
+                desc: '自动先备份 trustos 再关闭（降低风险）',
+                danger: true,
+                onTap: _sprdDisableAvb,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
 
         AppCard(
           title: '分区操作（需 FDL 文件）',
