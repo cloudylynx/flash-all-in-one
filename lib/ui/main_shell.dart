@@ -27,6 +27,7 @@ import 'pages/recovery_page.dart';
 import 'pages/root_page.dart';
 import 'pages/scripts_page.dart';
 import 'pages/device_screen_page.dart';
+import 'pages/sbc_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/shell_page.dart';
 import 'pages/vendor_page.dart';
@@ -173,6 +174,8 @@ class _MainShellState extends State<MainShell> {
         return const OtaPage();
       case 'recovery':
         return const RecoveryPage();
+      case 'sbc':
+        return const SbcPage();
       case 'files':
         return const FilesPage();
       case 'fastboot':

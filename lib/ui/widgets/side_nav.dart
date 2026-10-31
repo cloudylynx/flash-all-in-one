@@ -158,6 +158,12 @@ class SideNav extends StatefulWidget {
         group: '高级',
         advanced: true),
     NavItem(
+        id: 'sbc',
+        label: '单板电脑刷写（RK/全志）',
+        icon: Icons.developer_board,
+        group: '高级',
+        advanced: true),
+    NavItem(
         id: 'partitions',
         label: '分区读写',
         icon: Icons.grid_view,
