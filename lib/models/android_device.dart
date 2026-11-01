@@ -42,7 +42,7 @@ class AndroidDevice {
   bool get isReady => state == 'device';
 
   /// 是否可操作（系统模式或 fastboot 模式）
-  bool get isOperable => isReady || isFastboot;
+  bool get isOperable => isReady || isFastboot || isRecovery;
 
   /// 是否是模拟器
   bool get isEmulator =>
@@ -51,6 +51,9 @@ class AndroidDevice {
   /// 是否在 fastboot 模式
   bool get isFastboot =>
       state == 'bootloader' || state == 'fastboot' || state == 'fastbootd';
+
+  /// 是否在 recovery 模式（可以通过 adb sideload 操作）
+  bool get isRecovery => state == 'recovery';
 
   /// 显示名：优先 model，其次 serial
   String get displayName {

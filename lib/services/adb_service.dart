@@ -361,6 +361,25 @@ class AdbService {
     );
   }
 
+    /// ADB Sideload（recovery 模式下刷入刷机包）
+    ///
+    /// 需要设备处于 recovery 模式。
+    /// 刷机包格式：OTA zip / 完整 ROM zip
+    Future<int> sideload(
+      String serial,
+      String zipPath, {
+      void Function(String line)? onLine,
+    }) async {
+      final args = ['-s', serial, 'sideload', zipPath];
+      return ProcessRunner.stream(
+        await _getAdb(),
+        args,
+        onLine: onLine ?? (_) {},
+        timeout: const Duration(hours: 2),
+      );
+    }
+
+
   /// 卸载应用
   Future<ExecResult> uninstall(
     String serial,
