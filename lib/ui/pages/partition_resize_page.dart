@@ -24,6 +24,7 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
   Map<String, String> _freeSpace = {};
   final _targetSizeController = TextEditingController(text: '0');
   int _currentStep = 0;
+  String _autoSizeMode = 'max';
 
   final List<String> _log = [];
   final _scrollController = ScrollController();
@@ -103,7 +104,9 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
     _addLog('  一键扩容 userdata');
     _addLog('════════════════════════════════');
 
+    final targetGb = _autoSizeMode == 'max' ? 0 : (int.tryParse(_autoSizeMode) ?? 0);
     final r = await PartitionResizeService.instance.expandUserdataAuto(
+      targetSizeGb: targetGb,
       onLine: _addLog,
       onProgress: (step, total, label) {
         if (mounted) {
@@ -238,15 +241,76 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
                             height: 1.6),
                       ),
                       const SizedBox(height: 14),
+
+                      // 扩容大小选择
+                      Row(
+                        children: [
+                          const Text('扩容到',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButton<String>(
+                              value: _autoSizeMode,
+                              isDense: true,
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textPrimary),
+                              items: [
+                                const DropdownMenuItem(
+                                  value: 'max',
+                                  child: Text('磁盘末尾（最大）'),
+                                ),
+                                for (final gb in [32, 64, 96, 128, 160, 192, 256])
+                                  DropdownMenuItem(
+                                    value: '$gb',
+                                    child: Text('$gb GB'),
+                                  ),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(
+                                      () => _autoSizeMode = v ?? 'max'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // 实际会扩多少
+                          if (_freeSpace['free_gb'] != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color:
+                                    AppTheme.success.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                '+${_calcGrowText()}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.success),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
                       SizedBox(
                         height: 46,
                         child: ElevatedButton.icon(
                           onPressed: _busy || _disk == null
                               ? null
                               : () async {
+                                  final targetText = _autoSizeMode == 'max'
+                                      ? '磁盘末尾（最大）'
+                                      : '$_autoSizeMode GB';
                                   final ok = await _confirm(
                                     '⚠️ 一键扩容 userdata',
-                                    '将自动把 userdata 扩展到磁盘末尾。\n\n'
+                                    '目标大小：$targetText\n\n'
                                         '会自动完成：\n'
                                         '  ① 识别设备\n'
                                         '  ② 备份分区表（失败可回滚）\n'
@@ -748,6 +812,24 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
       ],
     );
   }
+
+  /// 算出实际会扩容多少
+  String _calcGrowText() {
+    final freeGb = double.tryParse(_freeSpace['free_gb'] ?? '0') ?? 0;
+    if (_autoSizeMode == 'max') {
+      return '${freeGb.toStringAsFixed(1)} GB';
+    }
+    final targetGb = int.tryParse(_autoSizeMode) ?? 0;
+    final ud = _partitions.where((p) => p.isUserdata).firstOrNull;
+    final currentGb = ud == null
+        ? 0.0
+        : double.tryParse(ud.size.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+    final grow = targetGb - currentGb;
+    if (grow <= 0) return '已够大';
+    if (grow > freeGb) return '${freeGb.toStringAsFixed(1)} GB（上限）';
+    return '${grow.toStringAsFixed(1)} GB';
+  }
+
 
   String _stepLabel(int step) {
     const labels = [

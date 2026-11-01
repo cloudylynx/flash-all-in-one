@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../core/config.dart';
 import '../core/process_runner.dart';
 
 /// 调整结果

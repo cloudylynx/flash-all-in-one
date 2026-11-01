@@ -18,7 +18,6 @@ class MultibootPage extends StatefulWidget {
 }
 
 class _MultibootPageState extends State<MultibootPage> {
-  bool _ready = false;
   bool _busy = false;
   Map<String, String> _storageInfo = {};
 
@@ -54,7 +53,7 @@ class _MultibootPageState extends State<MultibootPage> {
   Future<void> _init() async {
     final ok = await MultibootService.instance.init();
     if (!mounted) return;
-    setState(() => _ready = ok);
+    // ready 状态由后续扫描体现
 
     if (ok) {
       final info = await MultibootService.instance.getStorageInfo();

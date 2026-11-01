@@ -644,6 +644,7 @@ class PartitionResizeService {
   ///
   /// 返回的 log 里包含每一步的进度
   Future<ResizeResult> expandUserdataAuto({
+    int targetSizeGb = 0,
     void Function(String line)? onLine,
     void Function(int step, int total, String label)? onProgress,
   }) async {
@@ -754,7 +755,23 @@ class PartitionResizeService {
 
     final startSector = int.parse(userdata.startSector);
     final oldEndSector = int.parse(userdata.endSector);
-    final newEndSector = totalSectors - 34; // 留 34 扇区给 GPT 备份表
+    final maxEndSector = totalSectors - 34; // 留 34 扇区给 GPT 备份表
+
+    int newEndSector;
+    if (targetSizeGb > 0) {
+      // 指定大小
+      const sectorsPerGb = 2097152;
+      newEndSector = startSector + targetSizeGb * sectorsPerGb - 1;
+      if (newEndSector > maxEndSector) {
+        add('  ⚠️ 目标 ${targetSizeGb}GB 超出容量，改用磁盘末尾');
+        newEndSector = maxEndSector;
+      } else {
+        add('  目标: $targetSizeGb GB');
+      }
+    } else {
+      newEndSector = maxEndSector;
+      add('  目标: 磁盘末尾（最大）');
+    }
 
     add('  磁盘总扇区: $totalSectors');
     add('  目标结束: $newEndSector');

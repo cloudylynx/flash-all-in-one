@@ -176,7 +176,7 @@ class RecoveryService {
     add('  输出: $outputDir');
     add('');
 
-    final code = await ProcessRunner.stream(
+    await ProcessRunner.stream(
       exe,
       ['/dump', imagePath],
       onLine: add,
@@ -262,7 +262,7 @@ class RecoveryService {
     }
     args.add(imagePath);
 
-    final code = await ProcessRunner.stream(
+    await ProcessRunner.stream(
       exe,
       args,
       onLine: add,
