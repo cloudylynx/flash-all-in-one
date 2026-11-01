@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/modem_backup_service.dart';
 import '../../services/multiboot_service.dart';
+import '../../services/windows_tweak_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 
@@ -25,6 +26,7 @@ class _MultibootPageState extends State<MultibootPage> {
   final _targetController = TextEditingController();
   final _mountController = TextEditingController(text: '/mnt/win');
   final _wimIndexController = TextEditingController(text: '1');
+  final _winDirController = TextEditingController();
   String? _wimPath;
   List<ModemPartition> _modemParts = [];
   bool _modemScanning = false;
@@ -45,6 +47,7 @@ class _MultibootPageState extends State<MultibootPage> {
     _targetController.dispose();
     _mountController.dispose();
     _wimIndexController.dispose();
+    _winDirController.dispose();
     super.dispose();
   }
 
@@ -735,6 +738,105 @@ class _MultibootPageState extends State<MultibootPage> {
                 ),
                 const SizedBox(height: 14),
 
+                // ═══ Windows 系统调整 ═══
+                if (Platform.isWindows)
+                  AppCard(
+                    title: 'Windows 系统调整',
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('离线注册表',
+                          style: TextStyle(
+                              fontSize: 9, color: AppTheme.accent)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          '装完 Windows 后，系统还没启动时，\n'
+                          '直接改注册表文件。需要填 Windows 盘符。',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                              height: 1.6),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const SizedBox(
+                              width: 70,
+                              child: Text('Windows',
+                                  style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: AppTheme.textSecondary)),
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: _winDirController,
+                                decoration: const InputDecoration(
+                                  hintText: '例如 D: 或 E:',
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                ),
+                                style: const TextStyle(
+                                    fontSize: 11, fontFamily: 'monospace'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _winAction(Icons.wifi_off, '跳过 Win11 联网激活',
+                            'BypassNRO = 1',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance
+                                    .skipWin11Online(
+                                        winDir: dir, onLine: _addLog))),
+                        const Divider(height: 14),
+                        _winAction(Icons.skip_next, '跳过开机向导',
+                            '启用 Administrator 账户',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance.skipOobe(
+                                    winDir: dir, onLine: _addLog))),
+                        const Divider(height: 14),
+                        _winAction(Icons.disc_full, '关闭磁盘检查',
+                            'BootExecute 清空',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance.disableDiskCheck(
+                                    winDir: dir, onLine: _addLog))),
+                        const Divider(height: 14),
+                        _winAction(Icons.healing, '禁用自动修复',
+                            '关闭 WinRE',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance.disableAutoRepair(
+                                    winDir: dir, onLine: _addLog))),
+                        const Divider(height: 14),
+                        _winAction(Icons.usb, 'USB 模式 → Host',
+                            '当电脑用（外接键鼠）',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance.setUsbMode(
+                                    winDir: dir, mode: 1, onLine: _addLog))),
+                        const Divider(height: 14),
+                        _winAction(Icons.usb, 'USB 模式 → Device',
+                            '当 U 盘用',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance.setUsbMode(
+                                    winDir: dir, mode: 3, onLine: _addLog))),
+                        const Divider(height: 14),
+                        _winAction(Icons.usb, 'USB 模式 → 双角色',
+                            '自动切换（推荐）',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance.setUsbMode(
+                                    winDir: dir, mode: 6, onLine: _addLog))),
+                      ],
+                    ),
+                  ),
+                if (Platform.isWindows) const SizedBox(height: 14),
+
                 // ═══ 支持设备 ═══
                 AppCard(
                   title: '已知支持的设备',
@@ -849,6 +951,63 @@ class _MultibootPageState extends State<MultibootPage> {
       ],
     );
   }
+
+  Future<void> _runWinTweak(
+      Future<WinTweakResult> Function(String winDir) action) async {
+    final dir = _winDirController.text.trim();
+    if (dir.isEmpty) {
+      _addLog('❌ 请先填写 Windows 盘符（如 D: 或 E:）');
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+    final r = await action(dir);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+  }
+
+  Widget _winAction(IconData icon, String label, String desc,
+      Future<void> Function() onTap) {
+    final enabled = !_busy;
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Icon(icon,
+                size: 15,
+                color: enabled ? AppTheme.accent : AppTheme.textMuted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: enabled
+                              ? AppTheme.textPrimary
+                              : AppTheme.textMuted)),
+                  Text(desc,
+                      style: const TextStyle(
+                          fontSize: 10, color: AppTheme.textMuted)),
+                ],
+              ),
+            ),
+            if (enabled)
+              const Icon(Icons.chevron_right,
+                  size: 15, color: AppTheme.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Future<void> _doFormat(String fsType) async {
     final target = _targetController.text.trim();

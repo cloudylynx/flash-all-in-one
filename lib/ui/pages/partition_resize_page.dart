@@ -23,6 +23,7 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
   List<PartitionInfo> _partitions = [];
   Map<String, String> _freeSpace = {};
   final _targetSizeController = TextEditingController(text: '0');
+  int _currentStep = 0;
 
   final List<String> _log = [];
   final _scrollController = ScrollController();
@@ -91,6 +92,40 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
     await _refresh();
   }
 
+  /// 一键扩容（全自动，带进度显示）
+  Future<void> _runAuto() async {
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+
+    _addLog('════════════════════════════════');
+    _addLog('  一键扩容 userdata');
+    _addLog('════════════════════════════════');
+
+    final r = await PartitionResizeService.instance.expandUserdataAuto(
+      onLine: _addLog,
+      onProgress: (step, total, label) {
+        if (mounted) {
+          setState(() => _currentStep = step);
+        }
+      },
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _currentStep = 0;
+    });
+
+    _addLog('');
+    _addLog('════════════════════════════════');
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+    _addLog('════════════════════════════════');
+
+    await _refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final userdata = _partitions.where((p) => p.isUserdata).firstOrNull;
@@ -139,6 +174,143 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
                             color: AppTheme.textSecondary,
                             height: 1.7),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // ═══ 一键扩容（最显眼）═══
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.primary.withValues(alpha: 0.15),
+                        AppTheme.accent.withValues(alpha: 0.08),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.4),
+                        width: 1.5),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.auto_fix_high,
+                              size: 20, color: AppTheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('一键扩容',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.primary)),
+                          const Spacer(),
+                          if (_freeSpace['free_gb'] != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accent.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                '可扩 ${_freeSpace['free_gb']} GB',
+                                style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.accent),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        '自动把 userdata 扩展到磁盘末尾，不用填任何参数。\n'
+                        '自动备份分区表，失败会自动回滚。',
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.textSecondary,
+                            height: 1.6),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          onPressed: _busy || _disk == null
+                              ? null
+                              : () async {
+                                  final ok = await _confirm(
+                                    '⚠️ 一键扩容 userdata',
+                                    '将自动把 userdata 扩展到磁盘末尾。\n\n'
+                                        '会自动完成：\n'
+                                        '  ① 识别设备\n'
+                                        '  ② 备份分区表（失败可回滚）\n'
+                                        '  ③ 分析分区\n'
+                                        '  ④ 删除并重建分区\n'
+                                        '  ⑤ 扩容文件系统\n\n'
+                                        '⚠️ 过程 5-30 分钟，不要断开 USB\n'
+                                        '⚠️ 中断会导致数据丢失',
+                                  );
+                                  if (ok != true) return;
+
+                                  await _runAuto();
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.rocket_launch, size: 20),
+                          label: Text(
+                            _busy ? '扩容中…' : '开始一键扩容',
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      // 进度条
+                      if (_busy && _currentStep > 0) ...[
+                        const SizedBox(height: 14),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  '步骤 $_currentStep / 7',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.primary),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _stepLabel(_currentStep),
+                                  style: const TextStyle(
+                                      fontSize: 10.5,
+                                      color: AppTheme.textSecondary),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                value: _currentStep / 7,
+                                minHeight: 6,
+                                backgroundColor:
+                                    AppTheme.primary.withValues(alpha: 0.15),
+                                valueColor: const AlwaysStoppedAnimation(
+                                    AppTheme.primary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -576,6 +748,21 @@ class _PartitionResizePageState extends State<PartitionResizePage> {
       ],
     );
   }
+
+  String _stepLabel(int step) {
+    const labels = [
+      '',
+      '识别设备',
+      '推送工具',
+      '备份分区表',
+      '分析分区',
+      '重建分区',
+      '扩容文件系统',
+      '完成',
+    ];
+    return step >= 0 && step < labels.length ? labels[step] : '';
+  }
+
 
   Future<bool?> _confirm(String title, String warning) {
     return showDialog<bool>(

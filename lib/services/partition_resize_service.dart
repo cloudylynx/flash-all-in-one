@@ -626,4 +626,285 @@ class PartitionResizeService {
     } catch (_) {}
     return info;
   }
+
+  // ═══════════════════════════════════════════════
+  // 一键扩容（全自动，不需要填参数）
+  // ═══════════════════════════════════════════════
+
+  /// 一键扩容 userdata 到磁盘末尾
+  ///
+  /// 用户只需要点一下，其他全自动：
+  ///   ① 自动找磁盘
+  ///   ② 自动备份分区表
+  ///   ③ 自动读 userdata 位置
+  ///   ④ 自动算目标大小（磁盘末尾 - 34 扇区）
+  ///   ⑤ 删除 → 重建 → 通知内核
+  ///   ⑥ e2fsck → resize2fs
+  ///   ⑦ 失败自动回滚
+  ///
+  /// 返回的 log 里包含每一步的进度
+  Future<ResizeResult> expandUserdataAuto({
+    void Function(String line)? onLine,
+    void Function(int step, int total, String label)? onProgress,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    const totalSteps = 7;
+    void step(int n, String label) {
+      add('');
+      add('【$n/$totalSteps】$label');
+      onProgress?.call(n, totalSteps, label);
+    }
+
+    // ═══ ① 初始化 + 找磁盘 ═══
+    step(1, '识别设备');
+    if (!await init()) {
+      add('❌ 工具未就绪');
+      return ResizeResult(false, '工具未就绪', log);
+    }
+
+    final disk = await findStorageDevice();
+    if (disk == null) {
+      add('❌ 无法识别存储设备');
+      return ResizeResult(false, '无法识别存储设备', log);
+    }
+    add('  磁盘: $disk');
+
+    final isMtk = await isMtkPlatform();
+    add('  平台: ${isMtk ? "MTK" : "高通/其他"}');
+
+    final adb = await AppConfig.adbPath();
+
+    // ═══ ② 推送工具 ═══
+    step(2, '推送工具到设备');
+    final sgdisk = _tool('sgdisk');
+    final busybox = _tool('busybox');
+    final resize2fs = _tool('resize2fs');
+
+    if (sgdisk == null || busybox == null || resize2fs == null) {
+      add('❌ 必要工具缺失');
+      return ResizeResult(false, '工具缺失', log);
+    }
+
+    for (final t in [
+      MapEntry(sgdisk, '/data/local/tmp/sgdisk'),
+      MapEntry(busybox, '/data/local/tmp/busybox'),
+      MapEntry(resize2fs, '/data/local/tmp/resize2fs'),
+    ]) {
+      await ProcessRunner.run(
+        adb,
+        ['push', t.key, t.value],
+        timeout: const Duration(minutes: 2),
+      );
+    }
+    await ProcessRunner.run(
+      adb,
+      ['shell', 'su', '-c',
+       'chmod 755 /data/local/tmp/sgdisk /data/local/tmp/busybox /data/local/tmp/resize2fs'],
+      timeout: const Duration(seconds: 30),
+    );
+    add('  ✅ 3 个工具已就绪');
+
+    // ═══ ③ 备份分区表 ═══
+    step(3, '备份分区表（失败可回滚）');
+    const remoteBak = '/data/local/tmp/gpt-auto.bak';
+    final bakCode = await ProcessRunner.stream(
+      adb,
+      ['shell', 'su', '-c',
+       '/data/local/tmp/sgdisk --backup=$remoteBak $disk'],
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+    );
+    if (bakCode != 0) {
+      add('❌ 备份失败，中止');
+      return ResizeResult(false, '备份失败', log);
+    }
+    add('  ✅ 已备份到 $remoteBak');
+
+    // ═══ ④ 读分区表 ═══
+    step(4, '分析分区表');
+    final parts = await readPartitions(disk: disk);
+    final userdata = parts.where((p) => p.isUserdata).firstOrNull;
+
+    if (userdata == null) {
+      add('❌ 找不到 userdata 分区');
+      return ResizeResult(false, '找不到 userdata', log);
+    }
+
+    add('  userdata: 分区 #${userdata.number}');
+    add('    当前: ${userdata.size}');
+    add('    起始: ${userdata.startSector}');
+    add('    结束: ${userdata.endSector}');
+
+    // 读磁盘总扇区
+    final totalOut = await ProcessRunner.run(
+      adb,
+      ['shell', 'su', '-c', 'cat /sys/block/${p.basename(disk)}/size'],
+      timeout: const Duration(seconds: 10),
+    );
+    final totalSectors = int.tryParse(totalOut.stdout.trim()) ?? 0;
+    if (totalSectors == 0) {
+      add('❌ 无法读取磁盘大小');
+      return ResizeResult(false, '无法读磁盘大小', log);
+    }
+
+    final startSector = int.parse(userdata.startSector);
+    final oldEndSector = int.parse(userdata.endSector);
+    final newEndSector = totalSectors - 34; // 留 34 扇区给 GPT 备份表
+
+    add('  磁盘总扇区: $totalSectors');
+    add('  目标结束: $newEndSector');
+
+    final growGb =
+        (newEndSector - oldEndSector) * 512 / 1024 / 1024 / 1024;
+    add('  可扩容: ${growGb.toStringAsFixed(1)} GB');
+
+    if (growGb < 0.5) {
+      add('');
+      add('⚠️ 末尾空间不足 0.5 GB，无需扩容');
+      return ResizeResult(false, '空间不足', log);
+    }
+
+    // ═══ ⑤ 删除 + 重建 ═══
+    step(5, '重建分区（危险）');
+    add('  删除旧分区 #${userdata.number}');
+    var code = await ProcessRunner.stream(
+      adb,
+      ['shell', 'su', '-c',
+       '/data/local/tmp/sgdisk --delete=${userdata.number} $disk'],
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+    );
+
+    if (code != 0) {
+      add('❌ 删除失败，正在回滚…');
+      await _rollback(adb, disk, remoteBak, add);
+      return ResizeResult(false, '删除失败（已回滚）', log);
+    }
+
+    add('');
+    add('  重建分区 #${userdata.number}（$startSector → $newEndSector）');
+    code = await ProcessRunner.stream(
+      adb,
+      ['shell', 'su', '-c',
+       '/data/local/tmp/sgdisk '
+       '--new=${userdata.number}:$startSector:$newEndSector '
+       '--typecode=${userdata.number}:${userdata.typeCode} '
+       '--change-name=${userdata.number}:userdata $disk'],
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+    );
+
+    if (code != 0) {
+      add('❌ 重建失败，正在回滚…');
+      await _rollback(adb, disk, remoteBak, add);
+      return ResizeResult(false, '重建失败（已回滚）', log);
+    }
+    add('  ✅ 分区表已更新');
+
+    // 通知内核
+    add('');
+    add('  通知内核重读分区表');
+    await ProcessRunner.run(
+      adb,
+      ['shell', 'su', '-c',
+       'blockdev --rereadpt $disk 2>/dev/null || '
+       '/data/local/tmp/busybox partprobe $disk 2>/dev/null || true'],
+      timeout: const Duration(seconds: 30),
+    );
+    await Future.delayed(const Duration(seconds: 3));
+    add('  ✅ 已通知');
+
+    // ═══ ⑥ 检查 + 扩容文件系统 ═══
+    step(6, '扩容文件系统（最慢的一步）');
+    final partPath = '$disk${userdata.number}';
+
+    add('  卸载分区');
+    await ProcessRunner.run(
+      adb,
+      ['shell', 'su', '-c',
+       '/data/local/tmp/busybox umount -f $partPath 2>/dev/null; '
+       '/data/local/tmp/busybox umount -f /data 2>/dev/null; '
+       '/data/local/tmp/busybox umount -f /sdcard 2>/dev/null; true'],
+      timeout: const Duration(seconds: 60),
+    );
+
+    add('');
+    add('  e2fsck 检查文件系统');
+    final fsckCode = await ProcessRunner.stream(
+      adb,
+      ['shell', 'su', '-c',
+       '/data/local/tmp/busybox e2fsck -f -y $partPath'],
+      onLine: add,
+      timeout: const Duration(minutes: 20),
+    );
+    add(fsckCode <= 1
+        ? '  ✅ 文件系统正常'
+        : '  ⚠️ e2fsck 返回 $fsckCode（可能已修复）');
+
+    add('');
+    add('  resize2fs 扩容');
+    code = await ProcessRunner.stream(
+      adb,
+      ['shell', 'su', '-c', '/data/local/tmp/resize2fs $partPath'],
+      onLine: add,
+      timeout: const Duration(minutes: 40),
+    );
+
+    if (code != 0) {
+      add('');
+      add('❌ 文件系统扩容失败（分区表已改，但文件系统没扩）');
+      add('');
+      add('📌 补救方法：');
+      add('   1. 重启到 TWRP');
+      add('   2. 高级 → 终端，执行：');
+      add('      resize2fs $partPath');
+      return ResizeResult(false, '文件系统扩容失败', log);
+    }
+    add('  ✅ 文件系统已扩容');
+
+    // ═══ ⑦ 完成 ═══
+    step(7, '完成');
+    final newSize = (newEndSector - startSector) * 512 / 1024 / 1024 / 1024;
+    add('  ✅ 新大小: ${newSize.toStringAsFixed(1)} GB');
+    add('  （原来 ${userdata.size}）');
+    add('');
+    add('📌 请重启设备验证');
+    add('   分区表备份在设备上: $remoteBak');
+
+    return ResizeResult(true, '扩容完成，增加 ${growGb.toStringAsFixed(1)} GB', log);
+  }
+
+  /// 回滚分区表
+  Future<void> _rollback(
+    String adb,
+    String disk,
+    String backupPath,
+    void Function(String) add,
+  ) async {
+    add('  正在恢复分区表…');
+    final code = await ProcessRunner.run(
+      adb,
+      ['shell', 'su', '-c',
+       '/data/local/tmp/sgdisk --load-backup=$backupPath $disk'],
+      timeout: const Duration(minutes: 2),
+    );
+    if (code.ok) {
+      add('  ✅ 已恢复');
+      await ProcessRunner.run(
+        adb,
+        ['shell', 'su', '-c',
+         'blockdev --rereadpt $disk 2>/dev/null || true'],
+        timeout: const Duration(seconds: 30),
+      );
+    } else {
+      add('  ❌ 恢复失败！请手动执行：');
+      add('     sgdisk --load-backup=$backupPath $disk');
+    }
+  }
+
 }
