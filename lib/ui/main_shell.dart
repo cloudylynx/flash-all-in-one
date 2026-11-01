@@ -34,6 +34,7 @@ import 'pages/scripts_page.dart';
 import 'pages/device_screen_page.dart';
 import 'pages/sbc_page.dart';
 import 'pages/serial_page.dart';
+import 'pages/sideload_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/shell_page.dart';
 import 'pages/vendor_page.dart';
@@ -192,6 +193,8 @@ class _MainShellState extends State<MainShell> {
         return const FilesPage();
       case 'fastboot':
         return const FastbootPage();
+      case 'sideload':
+        return const SideloadPage();
       case 'edl':
         return const EdlPage();
       case 'mtk':

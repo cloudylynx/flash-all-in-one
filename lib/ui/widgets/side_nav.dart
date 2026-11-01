@@ -92,6 +92,11 @@ class SideNav extends StatefulWidget {
         label: 'Fastboot 刷机',
         icon: Icons.flash_on,
         group: '刷机'),
+    NavItem(
+        id: 'sideload',
+        label: 'ADB Sideload',
+        icon: Icons.system_update,
+        group: '刷机'),
     NavItem(id: 'mtk', label: 'MTK 刷机', icon: Icons.memory, group: '刷机'),
     NavItem(
         id: 'vendor',
