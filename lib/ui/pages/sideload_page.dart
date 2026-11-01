@@ -193,7 +193,7 @@ class _SideloadPageState extends State<SideloadPage> {
                               ListTile(
                                 dense: true,
                                 leading: const Icon(Icons.archive,
-                                    size: 16, color: AppTheme.accent),
+                                    size: 16, color: AppTheme.primary),
                                 title: Text(
                                   _zips[i].split(Platform.pathSeparator).last,
                                   style: const TextStyle(fontSize: 12),
@@ -262,7 +262,7 @@ class _SideloadPageState extends State<SideloadPage> {
                   child: ElevatedButton.icon(
                     onPressed: _sideloading ? null : _sideloadAll,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accent,
+                      backgroundColor: AppTheme.primary,
                       foregroundColor: Colors.white,
                     ),
                     icon: _sideloading
