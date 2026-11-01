@@ -177,7 +177,7 @@ class _OtaPageState extends State<OtaPage> {
         final base = _otaPath!.replaceAll(RegExp(r'\.zip$'), '');
         r = await OtaService.instance.patchOta(
           inputOta: _otaPath!,
-          outputOta: '${base}_patched.zip',
+            outputOta: '${base}_patched.zip',
           avbKey: _avbKey!,
           otaKey: _otaKey!,
           otaCrt: _otaCrt!,
@@ -355,7 +355,7 @@ class _OtaPageState extends State<OtaPage> {
               const SizedBox(width: 8),
               Text(
                 _packerVer != null
-                    ? 'payload_packer ${_packerVer}'
+                    ? 'payload_packer $_packerVer'
                     : 'payload_packer 未就绪',
                 style: const TextStyle(
                     fontSize: 12, color: AppTheme.textSecondary),
@@ -538,7 +538,7 @@ class _OtaPageState extends State<OtaPage> {
               const SizedBox(width: 8),
               Text(
                 _avbrootVer != null
-                    ? 'avbroot ${_avbrootVer}'
+                    ? 'avbroot $_avbrootVer'
                     : 'avbroot 未就绪',
                 style: const TextStyle(
                     fontSize: 12, color: AppTheme.textSecondary),

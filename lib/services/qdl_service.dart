@@ -255,9 +255,10 @@ class QdlService {
     return QdlResult(false, '刷机失败（退出码 $code）', log);
   }
 
-  /// 只读：显示分区表（qdl 没有此功能，用 edl-ng 或 mtk 替代）
+  /// 预览：解析 rawprogram XML，显示将要刷写的分区
   ///
-  /// 这里用 qdl 的 dry-run 模式预览
+  /// qdl 本身没有 dry-run，但可以解析 XML 列出每个分区，
+  /// 让用户在真正刷机前看到会写什么、文件是否齐全。
   Future<QdlResult> preview({
     required String loaderPath,
     required List<String> xmlPaths,
@@ -270,11 +271,93 @@ class QdlService {
       onLine?.call(s);
     }
 
-    add('══ qdl 预览（不实际写入）');
-    add('  注意：qdl 没有 dry-run 参数，这是直接执行');
-    add('  如需预览，请用 edl-ng 的 dump-rawprogram');
+    add('══ 刷机预览（解析 XML，不写入）');
+    add('');
 
-    return QdlResult(false, 'qdl 不支持 dry-run', log);
+    if (!File(loaderPath).existsSync()) {
+      add('❌ Loader 不存在: ${p.basename(loaderPath)}');
+      return QdlResult(false, 'Loader 不存在', log);
+    }
+    add('  Loader: ${p.basename(loaderPath)} '
+        '(${(File(loaderPath).lengthSync() / 1024).toStringAsFixed(0)} KB)');
+    add('');
+
+    var totalParts = 0;
+    var totalBytes = 0;
+    final missing = <String>[];
+
+    for (final xml in xmlPaths) {
+      if (!File(xml).existsSync()) {
+        add('⚠️ XML 不存在: ${p.basename(xml)}');
+        continue;
+      }
+
+      add('── ${p.basename(xml)}');
+      final content = File(xml).readAsStringSync();
+      final xmlDir = p.dirname(xml);
+
+      final re = RegExp(r'<program\s+([^>]*?)/?>', multiLine: true);
+
+      var count = 0;
+      for (final m in re.allMatches(content)) {
+        final attrs = m.group(1)!;
+
+        String attr(String name) {
+          final r = RegExp('$name="([^"]*)"');
+          final mm = r.firstMatch(attrs);
+          return mm?.group(1) ?? '';
+        }
+
+        final label = attr('label');
+        final filename = attr('filename');
+        if (filename.isEmpty) continue;
+
+        final filePath = p.join(xmlDir, filename);
+        final exists = File(filePath).existsSync();
+        var sizeText = '?';
+        if (exists) {
+          final sz = File(filePath).lengthSync();
+          totalBytes += sz;
+          sizeText = sz > 1024 * 1024
+              ? '${(sz / 1024 / 1024).toStringAsFixed(1)} MB'
+              : '${(sz / 1024).toStringAsFixed(0)} KB';
+        } else {
+          missing.add(filename);
+        }
+
+        add('  ${exists ? "✅" : "❌"} '
+            '${label.padRight(24)} '
+            '${filename.padRight(28)} '
+            '$sizeText');
+        count++;
+        totalParts++;
+      }
+
+      add('  （$count 个分区）');
+      add('');
+    }
+
+    add('════════════════════════');
+    add('  总计: $totalParts 个分区，'
+        '${(totalBytes / 1024 / 1024).toStringAsFixed(1)} MB');
+
+    if (missing.isNotEmpty) {
+      add('');
+      add('⚠️ ${missing.length} 个文件缺失:');
+      for (final m in missing.take(10)) {
+        add('    · $m');
+      }
+      if (missing.length > 10) {
+        add('    … 还有 ${missing.length - 10} 个');
+      }
+      add('');
+      add('❌ 有文件缺失，无法刷机');
+      return QdlResult(false, '缺少 ${missing.length} 个文件', log);
+    }
+
+    add('');
+    add('✅ 所有文件齐全，可以刷机');
+    return QdlResult(true, '预览完成', log);
   }
 
   /// 找同目录下的 loader 和 xml

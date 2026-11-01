@@ -258,13 +258,29 @@ class RootManagerService {
 
     return result;
   }
-
-  /// 推送 Magisk boot_patch.sh 并修补 boot.img
+  /// Magisk 修补 boot.img（完整实现）
   ///
-  /// 注意：这需要设备上已有 Magisk（用 magiskboot）
+  /// 从 Magisk APK 提取的官方工具链：
+  ///   · magiskboot     — 解包/重打包 boot.img
+  ///   · magiskinit     — 替换 ramdisk 里的 /init
+  ///   · magisk         — Magisk 主程序
+  ///   · boot_patch.sh  — 官方修补脚本
+  ///   · util_functions.sh
+  ///   · stub.apk       — Magisk App 存根
+  ///
+  /// 流程（在设备上执行）：
+  ///   ① 推送工具链到 /data/local/tmp/magisk-patch/
+  ///   ② 推送待修补的 boot.img
+  ///   ③ 执行 boot_patch.sh
+  ///   ④ 拉回修补后的 new-boot.img
+  ///
+  /// 不需要设备已 root，只需要 adb shell 能执行
   Future<RootInstallResult> patchBoot({
     required String serial,
     required String bootImagePath,
+    String? outputPath,
+    bool keepVerity = false,
+    bool keepForceEncrypt = false,
     void Function(String line)? onLine,
   }) async {
     final log = <String>[];
@@ -275,16 +291,151 @@ class RootManagerService {
 
     add('══ Magisk 修补 boot.img');
     add('  镜像: ${p.basename(bootImagePath)}');
+    if (!File(bootImagePath).existsSync()) {
+      add('❌ 文件不存在');
+      return RootInstallResult(false, '文件不存在', log);
+    }
+    add('  大小: ${(File(bootImagePath).lengthSync() / 1024 / 1024).toStringAsFixed(2)} MB');
     add('');
-    add('⚠️ 此功能需要：');
-    add('  · 设备已 root（有 magiskboot 权限）');
-    add('  · 或使用 PC 端 magiskboot');
-    add('');
-    add('📌 推荐流程：');
-    add('  1. 从设备拉取 boot.img');
-    add('  2. 用 Magisk App 的「安装 → 选择并修补文件」');
-    add('  3. fastboot flash boot <修补后的镜像>');
 
-    return RootInstallResult(false, '请用 Magisk App 修补', log);
+    // ① 提取工具链
+    add('── 提取 Magisk 工具链');
+    const tools = [
+      'magiskboot', 'magiskinit', 'magisk',
+      'boot_patch.sh', 'util_functions.sh', 'stub.apk',
+    ];
+    String? localDir;
+    for (final t in tools) {
+      final path = await ToolExtractor.extractFile(
+        assetPath: 'assets/tools/android/magisk/$t',
+        subDir: 'magisk',
+        fileName: t,
+        executable: !t.endsWith('.apk') && !t.endsWith('.sh'),
+      );
+      if (path == null) {
+        add('❌ 提取 $t 失败');
+        return RootInstallResult(false, '工具提取失败', log);
+      }
+      localDir ??= File(path).parent.path;
+    }
+    add('  ✅ ${tools.length} 个文件已就绪');
+    add('');
+
+    final adb = await AppConfig.adbPath();
+    const remoteDir = '/data/local/tmp/magisk-patch';
+
+    // ② 推送工具链
+    add('── 推送到设备');
+    await ProcessRunner.run(
+      adb,
+      ['-s', serial, 'shell', 'rm -rf $remoteDir && mkdir -p $remoteDir'],
+      timeout: const Duration(seconds: 30),
+    );
+
+    for (final t in tools) {
+      final local = p.join(localDir!, t);
+      final push = await ProcessRunner.run(
+        adb,
+        ['-s', serial, 'push', local, '$remoteDir/$t'],
+        timeout: const Duration(minutes: 1),
+      );
+      if (!push.ok) {
+        add('  ❌ 推送 $t 失败');
+        return RootInstallResult(false, '推送失败', log);
+      }
+    }
+    add('  ✅ 工具链已推送');
+
+    // ③ 推送 boot.img
+    add('── 推送 boot.img');
+    final pushBoot = await ProcessRunner.run(
+      adb,
+      ['-s', serial, 'push', bootImagePath, '$remoteDir/boot.img'],
+      timeout: const Duration(minutes: 5),
+    );
+    if (!pushBoot.ok) {
+      add('  ❌ 推送失败');
+      return RootInstallResult(false, '推送 boot 失败', log);
+    }
+    add('  ✅ 已推送');
+    add('');
+
+    // ④ 设置权限
+    add('── 设置执行权限');
+    await ProcessRunner.run(
+      adb,
+      ['-s', serial, 'shell',
+       'cd $remoteDir && chmod 755 magiskboot magiskinit magisk boot_patch.sh util_functions.sh'],
+      timeout: const Duration(seconds: 30),
+    );
+    add('  ✅ 已设置');
+    add('');
+
+    // ⑤ 执行修补
+    add('── 执行 boot_patch.sh');
+    add('  KEEPVERITY=$keepVerity');
+    add('  KEEPFORCEENCRYPT=$keepForceEncrypt');
+    add('');
+
+    final envPrefix =
+        'KEEPVERITY=$keepVerity KEEPFORCEENCRYPT=$keepForceEncrypt';
+    final code = await ProcessRunner.stream(
+      adb,
+      ['-s', serial, 'shell',
+       'cd $remoteDir && $envPrefix sh boot_patch.sh boot.img 2>&1'],
+      onLine: add,
+      timeout: const Duration(minutes: 10),
+    );
+
+    if (code != 0) {
+      add('');
+      add('❌ 修补失败（退出码 $code）');
+      return RootInstallResult(false, '修补失败', log);
+    }
+
+    // ⑥ 拉回结果
+    add('');
+    add('── 拉回修补后的镜像');
+    final savePath = outputPath ??
+        p.join(
+          p.dirname(bootImagePath),
+          'magisk_patched_${DateTime.now().millisecondsSinceEpoch}.img',
+        );
+
+    final pull = await ProcessRunner.run(
+      adb,
+      ['-s', serial, 'pull', '$remoteDir/new-boot.img', savePath],
+      timeout: const Duration(minutes: 5),
+    );
+
+    if (!pull.ok) {
+      add('❌ 拉取失败');
+      return RootInstallResult(false, '拉取失败', log);
+    }
+
+    final size = File(savePath).lengthSync();
+    add('  ✅ ${(size / 1024 / 1024).toStringAsFixed(2)} MB');
+    add('  路径: $savePath');
+    add('');
+
+    // ⑦ 清理
+    await ProcessRunner.run(
+      adb,
+      ['-s', serial, 'shell', 'rm -rf $remoteDir'],
+      timeout: const Duration(seconds: 30),
+    );
+
+    add('✅ Magisk 修补完成');
+    add('');
+    add('📌 下一步：');
+    add('   1. 重启到 fastboot：adb reboot bootloader');
+    add('   2. 刷入：fastboot flash boot ${p.basename(savePath)}');
+    add('   3. 重启：fastboot reboot');
+    add('');
+    add('⚠️ 如果设备有 A/B 分区，还要刷到 boot_b：');
+    add('   fastboot flash boot_b ${p.basename(savePath)}');
+
+    return RootInstallResult(true, '修补完成', log);
+
   }
 }

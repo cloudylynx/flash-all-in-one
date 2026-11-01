@@ -168,6 +168,18 @@ class SideNav extends StatefulWidget {
         icon: Icons.grid_view,
         group: '高级',
         advanced: true),
+    NavItem(
+        id: 'multiboot',
+        label: '多系统工具箱',
+        icon: Icons.devices,
+        group: '高级',
+        advanced: true),
+    NavItem(
+        id: 'resize',
+        label: '分区扩容',
+        icon: Icons.open_in_full,
+        group: '高级',
+        advanced: true),
   ];
 
   /// 智能穿戴 / 开发板 + 设置（不在危险框内）
@@ -186,11 +198,6 @@ class SideNav extends StatefulWidget {
         id: 'serial',
         label: 'TTL / 串口',
         icon: Icons.cable,
-        group: '穿戴'),
-    NavItem(
-        id: 'wearable',
-        label: '智能穿戴/开发板',
-        icon: Icons.watch,
         group: '穿戴'),
     NavItem(
         id: 'plugins',

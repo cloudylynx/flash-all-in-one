@@ -20,8 +20,10 @@ import 'pages/ios_page.dart';
 import 'pages/jailbreak_page.dart';
 import 'pages/logcat_page.dart';
 import 'pages/mtk_page.dart';
+import 'pages/multiboot_page.dart';
 import 'pages/ota_page.dart';
 import 'pages/overview_page.dart';
+import 'pages/partition_resize_page.dart';
 import 'pages/partitions_page.dart';
 import 'pages/perfetto_page.dart';
 import 'pages/plugins_page.dart';
@@ -35,7 +37,6 @@ import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/shell_page.dart';
 import 'pages/vendor_page.dart';
-import 'pages/wearable_page.dart';
 import 'pages/wireless_page.dart';
 import 'theme/app_theme.dart';
 import 'widgets/common.dart';
@@ -181,8 +182,6 @@ class _MainShellState extends State<MainShell> {
         return const RecoveryPage();
       case 'sbc':
         return const SbcPage();
-      case 'wearable':
-        return const WearablePage();
       case 'serial':
         return const SerialPage();
       case 'ios':
@@ -201,6 +200,10 @@ class _MainShellState extends State<MainShell> {
         return const VendorPage();
       case 'partitions':
         return const PartitionsPage();
+      case 'multiboot':
+        return const MultibootPage();
+      case 'resize':
+        return const PartitionResizePage();
       case 'bl_unlock':
         return const BlUnlockPage();
       case 'diagnose':
