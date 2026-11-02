@@ -8,6 +8,7 @@ import '../../core/config.dart';
 import '../../services/device_provider.dart';
 import '../../services/f2fs_service.dart';
 import '../../services/image_service.dart';
+import '../../services/lp_metadata_service.dart';
 import '../../services/vbmeta_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -30,10 +31,37 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
   String? _imagePath;
   ImageFormat _format = ImageFormat.unknown;
   VbmetaInfo? _vbmetaInfo;
+
+  /// 动态分区元数据（super.img 才有）
+  LpMetadata? _lpMeta;
   bool _busy = false;
   String _mode = 'vbmeta_disable';
   final List<String> _log = [];
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // 测试钩子：GAOJI_IMG_PATH=/path/to/super.img 自动加载
+    final hook = Platform.environment['GAOJI_IMG_PATH'];
+    if (hook != null && hook.isNotEmpty) {
+      _loadPath(hook);
+    }
+  }
+
+  /// 直接从路径加载（给测试钩子用）
+  Future<void> _loadPath(String path) async {
+    var fmt = await ImageService.instance.detectFormat(path);
+    final vb = await VbmetaService.instance.parse(path);
+    final lp = await LpMetadataService.instance.parseFile(path);
+    if (!mounted) return;
+    setState(() {
+      _imagePath = path;
+      _format = fmt;
+      _vbmetaInfo = vb;
+      _lpMeta = lp;
+    });
+  }
 
   @override
   void dispose() {
@@ -62,6 +90,9 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
     var fmt = await ImageService.instance.detectFormat(path);
     final vb = await VbmetaService.instance.parse(path);
 
+    // 动态分区（super.img）
+    final lp = await LpMetadataService.instance.parseFile(path);
+
     // 额外检测 F2FS
     if (fmt == ImageFormat.raw || fmt == ImageFormat.unknown) {
       if (await F2fsService.instance.isF2fs(path)) {
@@ -72,6 +103,7 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
     if (!mounted) return;
     setState(() {
       _imagePath = path;
+      _lpMeta = lp;
       _format = fmt;
       _vbmetaInfo = vb;
     });
@@ -273,6 +305,94 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
                         InfoRow(
                             label: 'Rollback',
                             value: '${_vbmetaInfo!.rollbackIndex}'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // ★ 动态分区（super.img）
+                if (_lpMeta != null) ...[
+                  AppCard(
+                    title: '动态分区（super.img）',
+                    trailing: _chip('LP 10.${_lpMeta!.minorVersion}',
+                        AppTheme.accent),
+                    child: Column(
+                      children: [
+                        InfoRow(
+                            label: '元数据版本',
+                            value:
+                                '${_lpMeta!.majorVersion}.${_lpMeta!.minorVersion}'),
+                        if (_lpMeta!.geometry != null) ...[
+                          InfoRow(
+                              label: '逻辑块大小',
+                              value:
+                                  '${_lpMeta!.geometry!.logicalBlockSize} 字节'),
+                          InfoRow(
+                              label: '元数据槽',
+                              value: '${_lpMeta!.geometry!.metadataSlotCount}'),
+                        ],
+                        InfoRow(
+                            label: '逻辑分区',
+                            value:
+                                '${_lpMeta!.partitions.length} 个，共 ${_lpMeta!.totalSizeText}'),
+                        const SizedBox(height: 10),
+                        // 分区列表
+                        for (final part in [..._lpMeta!.partitions]
+                          ..sort((a, b) => b.sizeBytes.compareTo(a.sizeBytes)))
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(part.name,
+                                      style: const TextStyle(
+                                          fontSize: 11.5,
+                                          fontFamily: 'monospace',
+                                          color: AppTheme.textPrimary)),
+                                ),
+                                if (part.isReadonly)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: _chip('只读', AppTheme.textMuted),
+                                  ),
+                                Text(part.sizeText,
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.textSecondary)),
+                                const SizedBox(width: 10),
+                                Text('${part.extents.length} 段',
+                                    style: const TextStyle(
+                                        fontSize: 10,
+                                        color: AppTheme.textMuted)),
+                              ],
+                            ),
+                          ),
+                        if (_lpMeta!.groups.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          const Divider(height: 1),
+                          const SizedBox(height: 8),
+                          for (final g in _lpMeta!.groups)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                        g.name.isEmpty ? '(默认)' : g.name,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            fontFamily: 'monospace',
+                                            color: AppTheme.textSecondary)),
+                                  ),
+                                  Text('上限 ${g.maxSizeText}',
+                                      style: const TextStyle(
+                                          fontSize: 10.5,
+                                          color: AppTheme.textMuted)),
+                                ],
+                              ),
+                            ),
+                        ],
                       ],
                     ),
                   ),
