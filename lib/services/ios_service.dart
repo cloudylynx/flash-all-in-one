@@ -47,8 +47,10 @@ class IosResult {
 ///   · 系统日志实时查看（idevicesyslog）
 ///   · 截图 / 改名 / 诊断
 ///
-/// ⚠️ 重要：iOS 越狱本身（palera1n / checkra1n）需要特定漏洞利用，
-///    本项目不集成越狱工具，只做设备管理和官方固件刷写。
+/// 越狱基于 checkm8 漏洞（A5~A11 / iPhone 5s ~ iPhone X），
+/// 相关工具全部开源：palera1n(MIT) / gaster(MIT) /
+/// libirecovery(LGPL-2.1) / PongoOS(MIT)。
+/// A12 及以上机型不受 checkm8 影响，无法越狱。
 class IosService {
   IosService._();
   static final IosService instance = IosService._();
@@ -62,30 +64,70 @@ class IosService {
   Future<bool> init() async {
     if (_available) return true;
 
-    // Windows：只支持 gaster + openra1n（原生 checkm8）
-    if (Platform.isWindows) {
-      for (final t in ['gaster.exe', 'openra1n.exe']) {
-        final path = await ToolExtractor.extractFile(
-          assetPath: 'assets/tools/windows/ios/$t',
-          subDir: 'ios',
-          fileName: t,
-          executable: true,
-        );
-        if (path != null && _dir == null) {
-          _dir = File(path).parent.path;
+      // Windows：gaster + openra1n（原生 checkm8）+ libimobiledevice 工具链
+      if (Platform.isWindows) {
+        // ① 越狱工具
+        for (final t in ['gaster.exe', 'openra1n.exe']) {
+          final path = await ToolExtractor.extractFile(
+            assetPath: 'assets/tools/windows/ios/$t',
+            subDir: 'ios',
+            fileName: t,
+            executable: true,
+          );
+          if (path != null && _dir == null) {
+            _dir = File(path).parent.path;
+          }
         }
+
+        // ② libimobiledevice 工具链（设备管理 / 备份 / 刷 IPSW）
+        const winTools = [
+          'idevicerestore.exe',
+          'ideviceinfo.exe',
+          'idevicebackup2.exe',
+          'idevicediagnostics.exe',
+          'ideviceenterrecovery.exe',
+          'idevicename.exe',
+          'idevicescreenshot.exe',
+          'idevicesyslog.exe',
+          'idevicepair.exe',
+          'ideviceinstaller.exe',
+        ];
+        for (final t in winTools) {
+          final path = await ToolExtractor.extractFile(
+            assetPath: 'assets/tools/windows/ios/$t',
+            subDir: 'ios',
+            fileName: t,
+            executable: true,
+          );
+          if (path != null && _dir == null) {
+            _dir = File(path).parent.path;
+          }
+        }
+
+        // ③ 依赖 DLL
+        const dlls = [
+          'libusb-1.0.dll',
+          'libusbK.dll',
+          // libimobiledevice 运行时依赖（旧版命名）
+          'imobiledevice.dll',
+          'plist.dll',
+          'usbmuxd.dll',
+          'getopt.dll',
+          'libcrypto-1_1-x64.dll',
+          'libssl-1_1-x64.dll',
+          'libcharset.dll',
+          'libiconv.dll',
+        ];
+        for (final dll in dlls) {
+          await ToolExtractor.extractFile(
+            assetPath: 'assets/tools/windows/ios/$dll',
+            subDir: 'ios',
+            fileName: dll,
+          );
+        }
+        _available = _dir != null;
+        return _available;
       }
-      // 依赖 DLL
-      for (final dll in ['libusb-1.0.dll', 'libusbK.dll']) {
-        await ToolExtractor.extractFile(
-          assetPath: 'assets/tools/windows/ios/$dll',
-          subDir: 'ios',
-          fileName: dll,
-        );
-      }
-      _available = _dir != null;
-      return _available;
-    }
 
     const tools = [
       'idevicerestore',
@@ -142,8 +184,15 @@ class IosService {
 
   String? _exe(String name) {
     if (_dir == null) return null;
-    final path = p.join(_dir!, name);
-    return File(path).existsSync() ? path : null;
+    // Windows 上工具带 .exe 后缀，Linux 上不带
+    final candidates = Platform.isWindows
+        ? ['$name.exe', name]
+        : [name, '$name.exe'];
+    for (final c in candidates) {
+      final path = p.join(_dir!, c);
+      if (File(path).existsSync()) return path;
+    }
+    return null;
   }
 
   /// 环境变量（库路径）
@@ -591,7 +640,30 @@ class IosService {
 
   /// 启动 usbmuxd
   Future<bool> startUsbmuxd() async {
-    if (Platform.isWindows) return false;
+    // Windows：用自带的 usbmuxd.exe 后台启动
+    if (Platform.isWindows) {
+      final exe = _exe('usbmuxd');
+      if (exe == null) return false;
+      // 已经在跑就不重复启动
+      final check = await ProcessRunner.run(
+        'tasklist',
+        ['/FI', 'IMAGENAME eq usbmuxd.exe'],
+        timeout: const Duration(seconds: 5),
+      );
+      if (check.output.toLowerCase().contains('usbmuxd.exe')) return true;
+      try {
+        await Process.start(
+          exe,
+          [],
+          mode: ProcessStartMode.detached,
+        );
+        await Future.delayed(const Duration(milliseconds: 800));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     try {
       // 先试 systemctl
       var r = await ProcessRunner.run(
