@@ -831,6 +831,18 @@ class _MultibootPageState extends State<MultibootPage> {
                             () => _runWinTweak((dir) =>
                                 WindowsTweakService.instance.setUsbMode(
                                     winDir: dir, mode: 6, onLine: _addLog))),
+
+                        const Divider(height: 14),
+                        _winAction(Icons.branding_watermark, '去除测试模式水印',
+                            '改 3 个 .mui 资源文件',
+                            () => _runWinTweak((dir) =>
+                                WindowsTweakService.instance
+                                    .removeTestModeWatermark(
+                                        winDir: dir, onLine: _addLog))),
+                        const Divider(height: 14),
+                        _winAction(Icons.image, '从 ISO 提取 install.wim',
+                            '选 ISO → 解出系统镜像',
+                            () => _extractWimFromIso()),
                       ],
                     ),
                   ),
@@ -964,6 +976,38 @@ class _MultibootPageState extends State<MultibootPage> {
       _log.clear();
     });
     final r = await action(dir);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+  }
+
+  /// 从 ISO 提取 install.wim
+  Future<void> _extractWimFromIso() async {
+    // 1. 选 ISO
+    final iso = await FilePicker.platform.pickFiles(
+      dialogTitle: '选择 Windows ISO 文件',
+      type: FileType.any,
+    );
+    if (iso == null || iso.files.single.path == null) return;
+    final isoPath = iso.files.single.path!;
+
+    // 2. 选输出目录
+    final outDir = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择 install.wim 保存目录',
+    );
+    if (outDir == null) return;
+
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+
+    final r = await WindowsTweakService.instance.extractWimFromIso(
+      isoPath: isoPath,
+      outputDir: outDir,
+      onLine: _addLog,
+    );
+
     if (!mounted) return;
     setState(() => _busy = false);
     _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../core/config.dart';
 import '../core/process_runner.dart';
 
 /// 调整结果
@@ -856,7 +857,8 @@ class WindowsTweakService {
     }
 
     add('── 备份分区表');
-    final bakPath = '/tmp/gpt-before-maxparts-${DateTime.now().millisecondsSinceEpoch}.bin';
+    final bakPath = p.join(Directory.systemTemp.path,
+        'gpt-before-maxparts-${DateTime.now().millisecondsSinceEpoch}.bin');
     var code = await ProcessRunner.run(
       'sgdisk',
       ['--backup=$bakPath', disk],
@@ -924,4 +926,460 @@ class WindowsTweakService {
       return false;
     }
   }
+
+  /// 去除 Windows 测试模式水印
+  ///
+  /// 原理：测试模式水印文字在三个 .mui 资源文件里：
+  ///   · Windows\Branding\Basebrd\zh-CN\basebrd.dll.mui
+  ///   · Windows\System32\zh-CN\shell32.dll.mui
+  ///   · Windows\System32\zh-CN\dxdiag.exe.mui
+  ///
+  /// 用 ResourceHacker 把这些文件里的水印字符串替换成空，
+  /// 注意：只是去水印，测试模式本身仍然开着。
+  ///
+  /// 来源：@小白之家 的方案（Mindows 工具箱收录）
+  Future<WinTweakResult> removeTestModeWatermark({
+    required String winDir,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!isSupported) {
+      return WinTweakResult(false, '仅 Windows 可用（需要提权到 TrustedInstaller）', log);
+    }
+
+    add('══ 去除测试模式水印');
+    add('  系统目录: $winDir');
+    add('');
+
+    final rh = await AppConfig.toolPath('reshacker/ResourceHacker.exe');
+    if (!File(rh).existsSync()) {
+      add('❌ 缺少 ResourceHacker.exe');
+      return WinTweakResult(false, '工具未就绪', log);
+    }
+    add('  ✅ ResourceHacker 就绪');
+
+    // 要做替换的三个文件（源路径 → 用哪几个 res）
+    final targets = <String, List<String>>{
+      'Windows/Branding/Basebrd/zh-CN/basebrd.dll.mui': [
+        'base1.res', 'base2.res', 'base3.res', 'base4.res',
+        'base5.res', 'base6.res', 'base7.res', 'base8.res',
+      ],
+      'Windows/System32/zh-CN/shell32.dll.mui': [
+        'shell1.res', 'shell2.res', 'shell3.res',
+      ],
+      'Windows/System32/zh-CN/dxdiag.exe.mui': ['d3d.res'],
+    };
+
+    final work = Directory.systemTemp.createTempSync('rmmark_');
+    add('  工作目录: ${work.path}');
+    add('');
+
+    var okCount = 0;
+
+    for (final entry in targets.entries) {
+      final rel = entry.key;
+      final resList = entry.value;
+      final src = File(p.join(winDir, rel));
+
+      add('── ${p.basename(rel)}');
+      if (!src.existsSync()) {
+        add('  ⚠️ 文件不存在，跳过');
+        continue;
+      }
+
+      // 1. 夺取权限（需要管理员）
+      add('  取得文件权限…');
+      final takeown = await ProcessRunner.run(
+        'takeown',
+        ['/f', src.path, '/a'],
+        timeout: AppConfig.normalTimeout,
+      );
+      final icacls = await ProcessRunner.run(
+        'icacls',
+        [src.path, '/grant', 'Administrators:F', '/C'],
+        timeout: AppConfig.normalTimeout,
+      );
+      if (!takeown.ok && !icacls.ok) {
+        add('  ⚠️ 权限设置失败，可能无法修改');
+      }
+
+      // 2. 复制到临时目录处理
+      final tmp = p.join(work.path, p.basename(rel));
+      try {
+        await src.copy(tmp);
+      } catch (e) {
+        add('  ❌ 复制失败: $e');
+        continue;
+      }
+
+      // 3. 逐个应用 res（每步输出到新文件，最后替换回去）
+      var cur = tmp;
+      var step = 0;
+      for (final res in resList) {
+        final resPath = p.join(
+            p.dirname(rh), 'res', res);
+        if (!File(resPath).existsSync()) {
+          add('    ⚠️ 缺少 $res');
+          continue;
+        }
+        final next = '$tmp.step${step++}';
+        final r = await ProcessRunner.run(
+          rh,
+          ['-addoverwrite', cur, next, resPath, ',,,'],
+          timeout: AppConfig.normalTimeout,
+        );
+        if (!r.ok) {
+          add('    ⚠️ $res 应用失败');
+        } else {
+          cur = next;
+        }
+      }
+
+      // 4. 写回原位置
+      try {
+        await File(cur).copy(src.path);
+        add('  ✅ 已替换');
+        okCount++;
+      } catch (e) {
+        add('  ❌ 写回失败: $e（可能需要管理员权限）');
+      }
+    }
+
+    // 清理
+    try {
+      work.deleteSync(recursive: true);
+    } catch (_) {}
+
+    add('');
+    if (okCount > 0) {
+      add('✅ 完成 $okCount/${targets.length} 个文件');
+      add('  重启后水印消失（测试模式本身仍开着）');
+      return WinTweakResult(true, '水印已去除', log);
+    }
+    return WinTweakResult(false, '全部失败', log);
+  }
+
+  /// 从 Windows ISO 提取 install.wim
+  ///
+  /// ISO 里的系统镜像位于 sources\install.wim（或 install.esd）。
+  /// 提取后就能用「安装 Windows」功能刷入。
+  Future<WinTweakResult> extractWimFromIso({
+    required String isoPath,
+    required String outputDir,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    final iso = File(isoPath);
+    if (!iso.existsSync()) {
+      return WinTweakResult(false, 'ISO 不存在', log);
+    }
+
+    add('══ 从 ISO 提取 WIM');
+    add('  ISO: ${p.basename(isoPath)}');
+    add('  大小: ${(iso.lengthSync() / 1024 / 1024).toStringAsFixed(0)} MB');
+    add('');
+
+    final sz = await AppConfig.toolPath('7z');
+    if (!File(sz).existsSync()) {
+      add('❌ 找不到 7z: $sz');
+      return WinTweakResult(false, '缺少 7z', log);
+    }
+
+    // 先列出 ISO 里的 sources 目录，看是 wim 还是 esd
+    add('  扫描 sources 目录…');
+    final list = await ProcessRunner.run(
+      sz,
+      ['l', isoPath],
+      timeout: const Duration(minutes: 2),
+    );
+    if (!list.ok) {
+      add('❌ 读取 ISO 失败');
+      return WinTweakResult(false, 'ISO 无法读取', log);
+    }
+
+    String? target;
+    if (list.output.contains('sources\\install.wim') ||
+        list.output.contains('sources/install.wim')) {
+      target = 'sources/install.wim';
+    } else if (list.output.contains('sources\\install.esd') ||
+        list.output.contains('sources/install.esd')) {
+      target = 'sources/install.esd';
+    }
+
+    if (target == null) {
+      add('❌ ISO 里找不到 install.wim / install.esd');
+      add('   这可能不是 Windows 安装镜像');
+      return WinTweakResult(false, '不是 Windows ISO', log);
+    }
+
+    add('  ✅ 找到 $target');
+    final needConvert = target.endsWith('.esd');
+    if (needConvert) {
+      add('  ⚠️ 是 ESD 格式，需要先转成 WIM');
+    }
+
+    final dir = Directory(outputDir);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+
+    add('');
+    add('  解压中（大文件，可能要几分钟）…');
+    final r = await ProcessRunner.stream(
+      sz,
+      ['e', isoPath, '-o$outputDir', target, '-y'],
+      onLine: (l) {
+        if (l.contains('%') || l.contains('Extracting')) add('    $l');
+      },
+      timeout: const Duration(minutes: 30),
+    );
+
+    if (r != 0) {
+      add('❌ 解压失败（退出码 $r）');
+      return WinTweakResult(false, '解压失败', log);
+    }
+
+    final outName = p.basename(target);
+    final outFile = File(p.join(outputDir, outName));
+    if (outFile.existsSync()) {
+      final sizeMb = (outFile.lengthSync() / 1024 / 1024).toStringAsFixed(0);
+      add('');
+      add('✅ 已提取: $outName（$sizeMb MB）');
+      add('   位置: ${outFile.path}');
+      return WinTweakResult(true, '提取完成', log);
+    }
+
+    add('❌ 解压后找不到 $outName');
+    return WinTweakResult(false, '文件未生成', log);
+  }
+
+  /// 启用 LG 设备的 Fastboot 模式
+  ///
+  /// LG 手机进了下载模式就出不来时，擦掉 laf 分区，
+  /// 之后按原来的下载模式组合键就会进 Fastboot。
+  ///
+  /// 会自动先备份 laf 分区再擦除。
+  Future<WinTweakResult> enableLgFastboot({
+    required String serial,
+    String lafPartition = 'laf',
+    String? backupPath,
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    add('══ 启用 LG Fastboot');
+    add('  设备: $serial');
+    add('  原理: 擦除 $lafPartition 分区，让下载模式失效');
+    add('        之后按原来的下载模式键组合，就会进 Fastboot');
+    add('');
+
+    final adb = await AppConfig.adbPath();
+
+    // 1. 确认能连上
+    final dev = await ProcessRunner.run(
+      adb, ['-s', serial, 'get-state'],
+      timeout: const Duration(seconds: 15),
+    );
+    if (!dev.ok || !dev.output.contains('device')) {
+      add('❌ 设备未连接或未授权（adb get-state 失败）');
+      return WinTweakResult(false, '设备不可用', log);
+    }
+    add('  ✅ 设备在线');
+
+    // 2. 检查 laf 分区存在
+    add('');
+    add('── 检查 $lafPartition 分区');
+    final check = await ProcessRunner.run(
+      adb,
+      ['-s', serial, 'shell', 'su', '-c',
+       'ls -l /dev/block/bootdevice/by-name/$lafPartition 2>/dev/null'],
+      timeout: const Duration(seconds: 15),
+    );
+    if (!check.ok || check.output.trim().isEmpty) {
+      add('❌ 找不到 $lafPartition 分区，这设备可能不是 LG 或分区名不同');
+      return WinTweakResult(false, '找不到 laf 分区', log);
+    }
+    add('  ✅ 分区存在');
+
+    // 3. 备份
+    if (backupPath != null && backupPath.isNotEmpty) {
+      add('');
+      add('── 备份 $lafPartition 到 $backupPath');
+      final bak = await ProcessRunner.stream(
+        adb,
+        ['-s', serial, 'shell', 'su', '-c',
+         'dd if=/dev/block/bootdevice/by-name/$lafPartition of=/sdcard/laf-backup.img'],
+        onLine: add,
+        timeout: const Duration(minutes: 5),
+      );
+      if (bak != 0) {
+        add('❌ 备份失败，中止（不备份就不敢擦）');
+        return WinTweakResult(false, '备份失败', log);
+      }
+
+      final pull = await ProcessRunner.run(
+        adb,
+        ['-s', serial, 'pull', '/sdcard/laf-backup.img', backupPath],
+        timeout: const Duration(minutes: 5),
+      );
+      if (!pull.ok) {
+        add('❌ 拉取备份失败');
+        return WinTweakResult(false, '拉取失败', log);
+      }
+      add('  ✅ 已备份到 $backupPath');
+    } else {
+      add('');
+      add('  ⚠️ 未指定备份路径，直接擦除（建议备份）');
+    }
+
+    // 4. 擦除 laf
+    add('');
+    add('── 擦除 $lafPartition');
+    final erase = await ProcessRunner.stream(
+      adb,
+      ['-s', serial, 'shell', 'su', '-c',
+       'dd if=/dev/zero of=/dev/block/bootdevice/by-name/$lafPartition bs=4096 count=1'],
+      onLine: add,
+      timeout: const Duration(minutes: 2),
+    );
+
+    if (erase != 0) {
+      add('❌ 擦除失败');
+      return WinTweakResult(false, '擦除失败', log);
+    }
+
+    add('');
+    add('✅ 完成');
+    add('  现在按住原来的「下载模式」组合键（通常是音量+ 插 USB），');
+    add('  设备会进入 Fastboot 而不是下载模式。');
+    add('  要恢复请用 Fastboot 刷回备份的 laf.img：');
+    add('    fastboot flash $lafPartition (备份文件)');
+    return WinTweakResult(true, '已启用 LG Fastboot', log);
+  }
+
+
+  /// 修复 USB 3.0 连接不稳定
+  ///
+  /// 症状：手机插 USB3 口时，adb/fastboot 经常断连、识别不到。
+  /// 原因：Windows 对 USB3 的 BOS 描述符和容器 ID 查询会干扰老设备。
+  ///
+  /// 做法：给 Android 设备的 USB 实例写三条注册表，跳过这些查询。
+  /// 目标路径是 `usbflags\18D1D00D0100`：
+  ///   18D1 = Google 的 VID
+  ///   D00D = adb 接口的 PID
+  ///
+  /// 来源：Mindows 工具箱 :USB3FIX
+  Future<WinTweakResult> fixUsb3Stability({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!isSupported) {
+      return WinTweakResult(false, '仅 Windows 可用', log);
+    }
+
+    const key = r'HKLM\SYSTEM\CurrentControlSet\Control\usbflags\18D1D00D0100';
+
+    add('══ 修复 USB 3.0 连接不稳定');
+    add('  目标: $key');
+    add('');
+    add('  三条设置的作用：');
+    add('    osvc                    — 关闭操作系统描述符查询');
+    add('    SkipContainerIdQuery    — 跳过容器 ID 查询');
+    add('    SkipBOSDescriptorQuery  — 跳过 BOS 描述符查询');
+    add('');
+
+    // (值名, 十六进制数据, 说明)
+    const values = [
+      ('osvc', '0000', '关闭 OS 描述符'),
+      ('SkipContainerIdQuery', '01000000', '跳过容器 ID'),
+      ('SkipBOSDescriptorQuery', '01000000', '跳过 BOS 描述符'),
+    ];
+
+    var ok = 0;
+    for (final (name, data, desc) in values) {
+      final r = await ProcessRunner.run(
+        'reg',
+        ['add', key, '/v', name, '/t', 'REG_BINARY', '/d', data, '/f'],
+        timeout: AppConfig.normalTimeout,
+      );
+      if (r.ok) {
+        add('  ✅ $name = $data（$desc）');
+        ok++;
+      } else {
+        add('  ❌ $name 失败: ${r.output.trim()}');
+      }
+    }
+
+    add('');
+    if (ok == values.length) {
+      add('✅ 全部写入成功');
+      add('  请拔掉 USB 线重新插上，让驱动重新枚举设备。');
+      add('  如果还是不稳定，试试换一根数据线或换 USB2.0 口。');
+      return WinTweakResult(true, 'USB3 修复已应用', log);
+    }
+    return WinTweakResult(false, '$ok/${values.length} 条成功', log);
+  }
+
+  /// 撤销 USB 3.0 修复（删除那三条注册表）
+  Future<WinTweakResult> undoUsb3Fix({
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    if (!isSupported) {
+      return WinTweakResult(false, '仅 Windows 可用', log);
+    }
+
+    const key = r'HKLM\SYSTEM\CurrentControlSet\Control\usbflags\18D1D00D0100';
+
+    add('══ 撤销 USB3 修复');
+    add('  删除: $key 下的三条值');
+    add('');
+
+    const names = ['osvc', 'SkipContainerIdQuery', 'SkipBOSDescriptorQuery'];
+    var ok = 0;
+    for (final name in names) {
+      final r = await ProcessRunner.run(
+        'reg',
+        ['delete', key, '/v', name, '/f'],
+        timeout: AppConfig.normalTimeout,
+      );
+      // 值本来就不存在也算成功
+      if (r.ok || r.output.contains('找不到') ||
+          r.output.contains('unable to find')) {
+        add('  ✅ 已删除 $name');
+        ok++;
+      } else {
+        add('  ⚠️ $name: ${r.output.trim()}');
+      }
+    }
+
+    add('');
+    add(ok == names.length
+        ? '✅ 已恢复原状'
+        : '⚠️ $ok/${names.length} 处理完成');
+    return WinTweakResult(ok > 0, '撤销完成', log);
+  }
+
 }

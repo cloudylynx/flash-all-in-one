@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/config.dart';
 import '../../services/device_provider.dart';
+import '../../services/windows_tweak_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/disclaimer_gate.dart';
@@ -281,7 +282,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () async {
                     await dp.restartAdb();
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(this.context).showSnackBar(
                       const SnackBar(content: Text('adb 服务已重启')),
                     );
                   },
@@ -299,7 +300,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       } catch (_) {}
                     }
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(this.context).showSnackBar(
                       const SnackBar(content: Text('已清理，重启应用后重新提取')),
                     );
                   },
@@ -308,6 +309,30 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 14),
+
+          // USB 连接修复（仅 Windows 主机）
+          if (Platform.isWindows) ...[
+            AppCard(
+              title: 'USB 连接',
+              child: Column(
+                children: [
+                  _actionRow(
+                    icon: Icons.usb_off,
+                    label: '修复 USB 3.0 连接不稳',
+                    desc: '手机插 USB3 口时 adb/fastboot 频繁断连时用',
+                    onTap: () => _fixUsb3(),
+                  ),
+                  _actionRow(
+                    icon: Icons.undo,
+                    label: '撤销 USB 3.0 修复',
+                    desc: '删除上面写入的三条 usbflags 注册表',
+                    onTap: () => _undoUsb3(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // 数据源致谢
           AppCard(
@@ -362,6 +387,96 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 修复 USB 3.0 连接不稳
+  Future<void> _fixUsb3() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('修复 USB 3.0 连接不稳'),
+        content: const Text(
+          '会往注册表写三条 USB 标志位，让 Windows 跳过对 Android 设备的\n'
+          'BOS 描述符和容器 ID 查询。\n\n'
+          '适用于：手机插 USB3 口时 adb/fastboot 频繁断连、识别不到。\n\n'
+          '随时可以用下面的「撤销」恢复。',
+          style: TextStyle(fontSize: 12.5, height: 1.6),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('应用')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final r = await WindowsTweakService.instance.fixUsb3Stability();
+    if (!mounted) return;
+
+    // 详细日志用弹窗展示
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(r.ok ? '✅ ${r.message}' : '❌ ${r.message}'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              r.log.join('\n'),
+              style: const TextStyle(
+                fontSize: 11,
+                fontFamily: 'monospace',
+                height: 1.5,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('知道了')),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(this.context).showSnackBar(
+      SnackBar(
+        content: Text(r.ok
+            ? '已应用，请拔插 USB 线让设备重新枚举'
+            : '失败：${r.message}'),
+      ),
+    );
+  }
+
+  /// 撤销 USB 3.0 修复
+  Future<void> _undoUsb3() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('撤销 USB 3.0 修复'),
+        content: const Text('会删除之前写入的三条 usbflags 注册表值。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('撤销')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final r = await WindowsTweakService.instance.undoUsb3Fix();
+    if (!mounted) return;
+    ScaffoldMessenger.of(this.context).showSnackBar(
+      SnackBar(content: Text(r.ok ? '✅ ${r.message}' : '❌ ${r.message}')),
     );
   }
 
