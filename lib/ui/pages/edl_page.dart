@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/edl_loader_service.dart';
+import '../../services/plugin_service.dart';
 import '../../services/edl_service.dart';
 import '../../services/gpt_parser.dart';
 import '../../services/qdl_service.dart';
@@ -27,6 +29,9 @@ class _EdlPageState extends State<EdlPage> with SingleTickerProviderStateMixin {
   List<EdlDevice> _devices = [];
   String? _selectedPort;
   final _portController = TextEditingController();
+
+  /// 机型标注（可选，用于 loader 自动匹配时缩小范围）
+  final _modelController = TextEditingController();
   bool _scanning = false;
 
   // 刷机文件
@@ -58,6 +63,17 @@ class _EdlPageState extends State<EdlPage> with SingleTickerProviderStateMixin {
     _tabController = TabController(length: 3, vsync: this);
     if (Platform.isWindows) _scan();
     _initQdl();
+    // 插件可能在别的页面已扫描过，刷新一次 loader 索引
+    _refreshLoaderIndex();
+  }
+
+  /// 刷新 EDL loader 索引（插件装/卸后这里会变化）
+  Future<void> _refreshLoaderIndex() async {
+    try {
+      await PluginService.instance.scan();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -65,6 +81,7 @@ class _EdlPageState extends State<EdlPage> with SingleTickerProviderStateMixin {
     _tabController.dispose();
     _scrollController.dispose();
     _portController.dispose();
+    _modelController.dispose();
     super.dispose();
   }
 
@@ -101,6 +118,95 @@ class _EdlPageState extends State<EdlPage> with SingleTickerProviderStateMixin {
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       }
     });
+  }
+
+  /// ★ 自动匹配 loader
+  ///
+  /// 需要插件提供 loader（plugin.json 里声明 "loaders": "目录名"）。
+  /// 匹配顺序：HWID → PK_HASH → 机型名 → 唯一候选。
+  Future<void> _autoMatchLoader() async {
+    final svc = EdlLoaderService.instance;
+
+    if (svc.all.isEmpty) {
+      _snack('没有可用的 loader，请先安装 loader 插件');
+      _addLog('❌ 没有可用的 loader');
+      _addLog('   请安装 EDL loader 插件（如 xiaomi-loaders）');
+      return;
+    }
+
+    // 已有 loader 索引，尝试匹配
+    // HWID/PK_HASH 需要先连设备读取，这里用机型名和候选兜底
+    final modelHint = _modelController.text.trim();
+    final match = svc.match(
+      model: modelHint.isEmpty ? null : modelHint,
+      onlyWritable: false,
+    );
+
+    if (match.found) {
+      setState(() => _elfPath = match.loader!.path);
+      _addLog('✅ 自动匹配到 loader');
+      _addLog('   ${match.loader!.displayName}');
+      _addLog('   方式: ${match.method.label} — ${match.reason}');
+      _addLog('   路径: ${match.loader!.path}');
+      if (match.loader!.type == EdlLoaderType.peek) {
+        _addLog('   ⚠️ 这是只读版，只能读分区，不能刷写');
+      }
+      _tryAutoXml();
+      return;
+    }
+
+    // 没自动匹配上，弹窗让用户选
+    final candidates = match.candidates.isEmpty ? svc.all : match.candidates;
+    if (!mounted) return;
+
+    final picked = await showDialog<EdlLoader>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('选择 Loader（共 ${candidates.length} 个）'),
+        content: SizedBox(
+          width: 560,
+          height: 400,
+          child: ListView.builder(
+            itemCount: candidates.length,
+            itemBuilder: (_, i) {
+              final l = candidates[i];
+              return ListTile(
+                dense: true,
+                title: Text(
+                  l.displayName,
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+                subtitle: Text(
+                  '${(l.size / 1024).toStringAsFixed(0)} KB'
+                  '${l.fromPlugin != null ? " · 来自 ${l.fromPlugin}" : ""}',
+                  style: const TextStyle(fontSize: 10.5),
+                ),
+                trailing: l.canWrite
+                    ? null
+                    : const Chip(
+                        label: Text('只读', style: TextStyle(fontSize: 9)),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                onTap: () => Navigator.pop(ctx, l),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+
+    if (picked != null) {
+      setState(() => _elfPath = picked.path);
+      _addLog('✅ 已选择: ${picked.displayName}');
+      _addLog('   ${picked.path}');
+      _tryAutoXml();
+    }
   }
 
   Future<void> _pickElf() async {
@@ -542,6 +648,43 @@ class _EdlPageState extends State<EdlPage> with SingleTickerProviderStateMixin {
                   hint: 'prog_firehose_ddr.elf',
                   onPick: _pickElf,
                 ),
+
+                // ★ 自动匹配 loader —— 只有装了 loader 插件才显示
+                if (EdlLoaderService.instance.all.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _modelController,
+                          decoration: const InputDecoration(
+                            hintText: '机型（可选，如 redmi7 / mi_a2）',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 9),
+                            prefixIcon: Icon(Icons.phone_android, size: 15),
+                          ),
+                          style: const TextStyle(fontSize: 11.5),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: _gptLoading ? null : _autoMatchLoader,
+                        icon: const Icon(Icons.auto_fix_high, size: 14),
+                        label: const Text('自动匹配',
+                            style: TextStyle(fontSize: 11.5)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.success,
+                          side: BorderSide(
+                              color: AppTheme.success.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
                 const SizedBox(height: 12),
                 _fileRow(
                   label: 'rawprogram XML',

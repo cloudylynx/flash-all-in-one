@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/process_runner.dart';
+import 'edl_loader_service.dart';
 
 /// 插件清单
 class PluginManifest {
@@ -276,6 +277,15 @@ class PluginService {
           continue;
         }
         _plugins.add(InstalledPlugin(dir: entity.path, manifest: manifest));
+
+        // 如果这个插件提供 EDL loader，注册给 EdlLoaderService
+        final loaderDir = json['loaders'];
+        if (loaderDir is String && loaderDir.isNotEmpty) {
+          EdlLoaderService.instance.registerPluginDir(
+            manifest.id,
+            p.join(entity.path, loaderDir),
+          );
+        }
       } catch (e) {
         _plugins.add(InstalledPlugin(
           dir: entity.path,
