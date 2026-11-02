@@ -48,6 +48,51 @@ class GptPartition {
     return '$b B';
   }
 
+
+    // ═══════════ Android A/B 分区标志（attributes 字段）═══════════
+    //
+    // 来源：Qualcomm EDL 协议实现（bkerler/edl gpt.py）
+    // 这几个 bit 就是 Android 无缝升级 A/B 机制的底层：
+    //   · 系统启动成功 → 把当前槽 SUCCESS 置 1
+    //   · 启动失败     → 重试计数 -1，减到 0 就回滚到另一槽
+
+    static const int _bitPriority = 48; // 3 bit，优先级 0-3
+    static const int _bitActive = 51; // 1 bit，当前激活槽
+    static const int _bitRetryCount = 52; // 3 bit，剩余重试次数
+    static const int _bitSuccessful = 54; // 1 bit，启动成功标记
+    static const int _bitUnbootable = 55; // 1 bit，不可启动
+
+    /// 优先级（0-3，数字越大越优先）
+    int get priority => (attributes >> _bitPriority) & 0x7;
+
+    /// 是否是当前激活的槽
+    bool get isActive => ((attributes >> _bitActive) & 0x1) == 1;
+
+    /// 剩余重试次数（0-7）
+    int get retryCount => (attributes >> _bitRetryCount) & 0x7;
+
+    /// 是否已成功启动过
+    bool get isSuccessful => ((attributes >> _bitSuccessful) & 0x1) == 1;
+
+    /// 是否被标记为不可启动（系统可能已损坏）
+    bool get isUnbootable => ((attributes >> _bitUnbootable) & 0x1) == 1;
+
+    /// 这个分区有没有 A/B 相关标志
+    bool get hasAbFlags => attributes != 0;
+
+    /// A/B 状态可读文本（给 UI 用）
+    String get abStatusText {
+      if (!hasAbFlags) return '';
+      final parts = <String>[];
+      if (isActive) parts.add('激活');
+      if (isSuccessful) parts.add('已成功');
+      if (isUnbootable) parts.add('不可启动');
+      if (retryCount > 0) parts.add('重试$retryCount次');
+      if (priority > 0) parts.add('优先级$priority');
+      return parts.join(' · ');
+    }
+
+
   @override
   String toString() => 'GptPartition($name, LBA $firstLba-$lastLba)';
 }

@@ -743,6 +743,7 @@ class _EdlPageState extends State<EdlPage> with SingleTickerProviderStateMixin {
           sizeText: p.sizeText(_gptTable!.sectorSize),
           startLba: p.firstLba,
           sectors: p.sectors,
+          abStatus: p.abStatusText,
         ));
       }
     } else if (hasXml) {
@@ -891,11 +892,37 @@ class _EdlPageState extends State<EdlPage> with SingleTickerProviderStateMixin {
                       ),
                       Expanded(
                         flex: 3,
-                        child: Text(e.name,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                fontFamily: 'monospace',
-                                color: AppTheme.textPrimary)),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(e.name,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontFamily: 'monospace',
+                                      color: AppTheme.textPrimary),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            if (e.abStatus.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.success
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  e.abStatus,
+                                  style: const TextStyle(
+                                    fontSize: 8.5,
+                                    color: AppTheme.success,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                       Expanded(
                         flex: 3,
@@ -1107,11 +1134,15 @@ class _PartRow {
   final int? startLba;
   final int? sectors;
 
+  /// A/B 分区状态（空 = 无标志）
+  final String abStatus;
+
   _PartRow({
     required this.name,
     this.file,
     required this.sizeText,
     this.startLba,
     this.sectors,
+    this.abStatus = '',
   });
 }
