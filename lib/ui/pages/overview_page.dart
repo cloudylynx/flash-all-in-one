@@ -187,9 +187,6 @@ class _OverviewPageState extends State<OverviewPage> {
                         ],
                       const SizedBox(height: 14),
 
-                      // 重启与模式切换
-                      _buildRebootCard(),
-                      const SizedBox(height: 14),
 
                       // 存储
                       if (_storage.isNotEmpty) _buildStorageCard(),
@@ -210,40 +207,371 @@ class _OverviewPageState extends State<OverviewPage> {
   }
 
   Widget _buildBasicCard(AndroidDevice d) {
-    return AppCard(
-      title: '基础信息',
-      trailing: IconButton(
-        icon: const Icon(Icons.refresh, size: 16),
-        color: AppTheme.textSecondary,
-        visualDensity: VisualDensity.compact,
-        onPressed: _loading ? null : _load,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ═══ Hero 区：设备身份 + 关键状态 ═══
+        _buildHeroSection(d),
+        const SizedBox(height: 12),
+
+        // ═══ 重启与模式切换（首页顶部，一眼可见）═══
+        _buildRebootCard(),
+        const SizedBox(height: 14),
+
+        // ═══ 关键指标（横排 4 格）═══
+        _buildKeyMetrics(d),
+        const SizedBox(height: 14),
+
+        // ═══ 详细信息（两列网格）═══
+        _buildDetailGrid(d),
+      ],
+    );
+  }
+
+  /// Hero 区：大图标 + 设备名 + 状态徽章
+  Widget _buildHeroSection(AndroidDevice d) {
+    final isOnline = d.state == 'device';
+    final statusColor = isOnline
+        ? AppTheme.success
+        : (d.isFastboot ? AppTheme.warning : AppTheme.danger);
+    final statusText = isOnline
+        ? '在线'
+        : (d.isFastboot ? 'Fastboot' : (d.state == 'unauthorized' ? '未授权' : '离线'));
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primary.withValues(alpha: 0.12),
+            AppTheme.accent.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
       ),
-      child: Column(
+      child: Row(
         children: [
-          InfoRow(label: '型号', value: d.model ?? '?'),
-          InfoRow(label: '品牌', value: d.brand ?? '?'),
-          InfoRow(label: '厂商', value: d.manufacturer ?? '?'),
-          InfoRow(label: 'Android', value: d.androidVersion ?? '?'),
-          InfoRow(label: 'SDK', value: d.sdkVersion ?? '?'),
-          InfoRow(label: 'ABI', value: d.abi ?? '?'),
-          InfoRow(label: 'Build', value: d.buildId ?? '?'),
-          InfoRow(label: '安全补丁', value: d.securityPatch ?? '?'),
-          InfoRow(
-              label: '屏幕',
-              value:
-                  '${d.screenResolution ?? "?"} @ ${d.screenDensity ?? "?"} dpi'),
-          InfoRow(
-              label: 'Root',
-              value: d.isRooted == null
-                  ? '检测中…'
-                  : (d.isRooted! ? '✓ 已 root' : '未 root')),
-          InfoRow(label: '连接', value: d.connectionType.toUpperCase()),
-          InfoRow(label: '序列号', value: d.serial, monospace: true),
+          // 设备图标
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppTheme.bgElevated.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: AppTheme.primary.withValues(alpha: 0.3), width: 1.5),
+            ),
+            child: Icon(
+              d.isEmulator ? Icons.desktop_windows : Icons.smartphone,
+              size: 32,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 18),
+
+          // 设备名 + 副标题
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        d.displayName,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // 状态徽章
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: statusColor.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: statusColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            statusText,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    if (d.brand != null && d.brand!.isNotEmpty) ...[
+                      Text(
+                        d.brand![0].toUpperCase() + d.brand!.substring(1),
+                        style: const TextStyle(
+                            fontSize: 12.5, color: AppTheme.textSecondary),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('·',
+                          style: TextStyle(color: AppTheme.textMuted)),
+                      const SizedBox(width: 8),
+                    ],
+                    if (d.androidVersion != null) ...[
+                      Text(
+                        'Android ${d.androidVersion}',
+                        style: const TextStyle(
+                            fontSize: 12.5, color: AppTheme.textSecondary),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('·',
+                          style: TextStyle(color: AppTheme.textMuted)),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      d.serial,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontFamily: 'monospace',
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // 右侧：状态摘要 + 刷新
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 18),
+                color: AppTheme.textSecondary,
+                tooltip: '刷新',
+                visualDensity: VisualDensity.compact,
+                onPressed: _loading ? null : _load,
+              ),
+              const SizedBox(height: 4),
+              // 连接类型标记
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.bgElevated.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      d.connectionType == 'tcp'
+                          ? Icons.wifi
+                          : (d.isEmulator
+                              ? Icons.desktop_windows
+                              : Icons.usb),
+                      size: 11,
+                      color: AppTheme.textMuted,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      d.connectionType.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
+  /// 关键指标（4 格横排）——只显示下面大卡片里没有的信息
+  Widget _buildKeyMetrics(AndroidDevice d) {
+    return Row(
+      children: [
+        Expanded(
+          child: _metricTile(
+            icon: Icons.aspect_ratio,
+            label: '分辨率',
+            value: d.screenResolution ?? '—',
+            color: AppTheme.accent,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _metricTile(
+            icon: Icons.security,
+            label: 'Root',
+            value: d.isRooted == null
+                ? '…'
+                : (d.isRooted! ? '已 Root' : '未 Root'),
+            color: d.isRooted == true ? AppTheme.success : AppTheme.textMuted,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _metricTile(
+            icon: d.connectionType == 'tcp' ? Icons.wifi : Icons.usb,
+            label: '连接方式',
+            value: d.connectionType.toUpperCase(),
+            color: AppTheme.primary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _metricTile(
+            icon: Icons.android,
+            label: 'Android',
+            value: d.androidVersion ?? '—',
+            color: AppTheme.success,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 单个指标块
+  Widget _metricTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                    fontSize: 10.5,
+                    color: AppTheme.textMuted,
+                    letterSpacing: 0.2),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace',
+              color: color,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 详细信息（两列网格）
+  Widget _buildDetailGrid(AndroidDevice d) {
+    final items = <MapEntry<String, String>>[
+      if (d.model != null) MapEntry('型号', d.model!),
+      if (d.manufacturer != null) MapEntry('厂商', d.manufacturer!),
+      if (d.abi != null) MapEntry('ABI', d.abi!),
+      if (d.buildId != null) MapEntry('Build', d.buildId!),
+      if (d.sdkVersion != null) MapEntry('SDK', d.sdkVersion!),
+      if (d.securityPatch != null) MapEntry('补丁', d.securityPatch!),
+      if (d.screenDensity != null) MapEntry('DPI', d.screenDensity!),
+      MapEntry('连接', d.connectionType.toUpperCase()),
+    ];
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    // 两列布局
+    final rows = <Widget>[];
+    for (var i = 0; i < items.length; i += 2) {
+      rows.add(Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          children: [
+            Expanded(child: _detailItem(items[i].key, items[i].value)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: i + 1 < items.length
+                  ? _detailItem(items[i + 1].key, items[i + 1].value)
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    return AppCard(
+      title: '详细信息',
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Column(children: rows),
+      ),
+    );
+  }
+
+  Widget _detailItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12.5,
+            color: AppTheme.textPrimary,
+            fontFamily: 'monospace',
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
 
   /// 加载 fastboot 设备信息
   Future<void> _loadFastboot(String serial) async {

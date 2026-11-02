@@ -104,7 +104,12 @@ class SideNav extends StatefulWidget {
         icon: Icons.business,
         group: '刷机'),
     NavItem(
-        id: 'root', label: '一键 Root', icon: Icons.security, group: '刷机'),
+        id: 'root', label: '一键 Root', icon: Icons.security, group: '系统改造'),
+    NavItem(
+        id: 'splash',
+        label: '开机 Logo 编辑',
+        icon: Icons.image,
+        group: '系统改造'),
 
     // 工具
     NavItem(
@@ -131,64 +136,68 @@ class SideNav extends StatefulWidget {
 
   /// 高级功能（危险，需协议确认）
   static const List<NavItem> advancedItems = [
+    // ── 系统改造（与 Root / Logo 同组）──
     NavItem(
-        id: 'bl_unlock',
-        label: 'Bootloader 解锁',
-        icon: Icons.lock_open,
-        group: '高级',
+        id: 'resize',
+        label: '分区扩容',
+        icon: Icons.expand,
+        group: '系统改造',
         advanced: true),
     NavItem(
-        id: 'edl',
-        label: 'EDL 深度刷机（9008）',
-        icon: Icons.build_circle,
-        group: '高级',
+        id: 'multiboot',
+        label: '多系统工具箱',
+        icon: Icons.layers,
+        group: '系统改造',
         advanced: true),
     NavItem(
         id: 'imgtool',
         label: '镜像工具（解包/vbmeta）',
         icon: Icons.tune,
-        group: '高级',
+        group: '系统改造',
+        advanced: true),
+    NavItem(
+        id: 'partitions',
+        label: '分区读写',
+        icon: Icons.storage,
+        group: '系统改造',
+        advanced: true),
+
+    // ── 进阶（危险操作）──
+    NavItem(
+        id: 'bl_unlock',
+        label: 'Bootloader 解锁',
+        icon: Icons.lock_open,
+        group: '进阶',
+        advanced: true),
+    NavItem(
+        id: 'edl',
+        label: 'EDL 深度刷机（9008）',
+        icon: Icons.usb,
+        group: '进阶',
         advanced: true),
     NavItem(
         id: 'ota',
         label: 'OTA 造包/重签',
-        icon: Icons.system_update_alt,
-        group: '高级',
+        icon: Icons.inventory_2,
+        group: '进阶',
         advanced: true),
     NavItem(
         id: 'recovery',
         label: '数据恢复/分区修复',
         icon: Icons.healing,
-        group: '高级',
+        group: '进阶',
         advanced: true),
     NavItem(
         id: 'sbc',
         label: '单板电脑刷写（RK/全志）',
         icon: Icons.developer_board,
-        group: '高级',
-        advanced: true),
-    NavItem(
-        id: 'partitions',
-        label: '分区读写',
-        icon: Icons.grid_view,
-        group: '高级',
-        advanced: true),
-    NavItem(
-        id: 'multiboot',
-        label: '多系统工具箱',
-        icon: Icons.devices,
-        group: '高级',
-        advanced: true),
-    NavItem(
-        id: 'resize',
-        label: '分区扩容',
-        icon: Icons.open_in_full,
-        group: '高级',
+        group: '进阶',
         advanced: true),
   ];
 
   /// 智能穿戴 / 开发板 + 设置（不在危险框内）
   static const List<NavItem> extraItems = [
+    // ── iOS ──
     NavItem(
         id: 'ios',
         label: 'iOS 设备管理',
@@ -199,18 +208,22 @@ class SideNav extends StatefulWidget {
         label: 'iOS 越狱',
         icon: Icons.lock_open,
         group: 'iOS'),
+
+    // ── 扩展（插件 + 硬件调试）──
+    NavItem(
+        id: 'plugins',
+        label: '插件管理',
+        icon: Icons.extension,
+        group: '扩展'),
     NavItem(
         id: 'serial',
         label: 'TTL / 串口',
         icon: Icons.cable,
-        group: '穿戴'),
+        group: '扩展'),
+
+    // ── 设置（独立，渲染在最后）──
     NavItem(
-        id: 'plugins',
-        label: '插件',
-        icon: Icons.extension,
-        group: '穿戴'),
-    NavItem(
-        id: 'settings', label: '设置', icon: Icons.settings, group: '穿戴'),
+        id: 'settings', label: '设置', icon: Icons.settings, group: '设置'),
   ];
 
 
@@ -371,13 +384,39 @@ class _SideNavState extends State<SideNav> {
                           ],
                         ),
                       ),
-                      for (final item in SideNav.advancedItems.where(_matches))
-                        _NavTile(
-                          item: item,
-                          selected: widget.selected == item.id,
-                          onTap: () => widget.onSelect(item.id),
-                          danger: true,
-                        ),
+                      // 按 group 分组渲染（系统改造 / 进阶）
+                      for (final grp in ['系统改造', '进阶']) ...[
+                        if (SideNav.advancedItems
+                            .where((i) => i.group == grp && _matches(i))
+                            .isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(
+                                left: 10, top: 8, bottom: 3),
+                            child: Row(
+                              children: [
+                                Text(
+                                  grp,
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.danger
+                                        .withValues(alpha: 0.75),
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          for (final item in SideNav.advancedItems
+                              .where((i) => i.group == grp && _matches(i)))
+                            _NavTile(
+                              item: item,
+                              selected: widget.selected == item.id,
+                              onTap: () => widget.onSelect(item.id),
+                              danger: true,
+                            ),
+                        ],
+                      ],
                       const SizedBox(height: 4),
                     ],
                   ),
@@ -397,20 +436,31 @@ class _SideNavState extends State<SideNav> {
                       ),
                   ],
 
-                  // ═══ 调试 / 开发板组 ═══
+                  // ═══ 扩展组（插件 + 硬件调试）═══
                   if (SideNav.extraItems
-                      .where((i) => i.group == '穿戴' && _matches(i))
+                      .where((i) => i.group == '扩展' && _matches(i))
                       .isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    _groupHeader('调试 / 开发板'),
+                    _groupHeader('扩展'),
                     for (final item in SideNav.extraItems
-                        .where((i) => i.group == '穿戴' && _matches(i)))
+                        .where((i) => i.group == '扩展' && _matches(i)))
                       _NavTile(
                         item: item,
                         selected: widget.selected == item.id,
                         onTap: () => widget.onSelect(item.id),
                       ),
                   ],
+
+                  // ═══ 设置（固定在末尾）═══
+                  const SizedBox(height: 10),
+                  const Divider(height: 16),
+                  for (final item in SideNav.extraItems
+                      .where((i) => i.group == '设置' && _matches(i)))
+                    _NavTile(
+                      item: item,
+                      selected: widget.selected == item.id,
+                      onTap: () => widget.onSelect(item.id),
+                    ),
                 ],
             ),
           ),
