@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -9,7 +10,25 @@ class AppConfig {
   AppConfig._();
 
   static const String appName = 'Flash All In One';
-  static const String appVersion = '0.1.0';
+    /// 版本号（从 pubspec.yaml 自动读取，不再手写）
+    ///
+    /// 之前是硬编码 '0.1.0'，和 pubspec 完全脱节，界面一直显示旧版本号。
+    static String _appVersion = '';
+
+    /// 版本号（如 2.0.0+12）；未初始化时返回占位
+    static String get appVersion => _appVersion.isEmpty ? '…' : _appVersion;
+
+    /// 启动时调用一次，从 pubspec 加载版本
+    static Future<void> loadVersion() async {
+      try {
+        final info = await PackageInfo.fromPlatform();
+        _appVersion = info.buildNumber.isEmpty
+            ? info.version
+            : '${info.version}+${info.buildNumber}';
+      } catch (_) {
+        _appVersion = '未知';
+      }
+    }
 
   static final Map<String, String> _cache = {};
   static String? _toolsDir;

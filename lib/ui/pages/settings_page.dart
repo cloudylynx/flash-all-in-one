@@ -89,7 +89,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               children: [
                 const InfoRow(label: '名称', value: AppConfig.appName),
-                const InfoRow(label: '版本', value: AppConfig.appVersion),
+                InfoRow(label: '版本', value: AppConfig.appVersion),
                 InfoRow(
                     label: '平台',
                     value:

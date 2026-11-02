@@ -1,7 +1,7 @@
 name: flashallinone
 description: "Flash All In One - 一站式 Android 刷机与设备管理工具箱"
 publish_to: 'none'
-version: 1.9.0+11
+version: 2.0.0+12
 
 environment:
   sdk: ^3.13.7
@@ -19,6 +19,7 @@ dependencies:
   window_manager: ^0.4.3
   url_launcher: ^6.3.0
   file_picker: ^8.1.6
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:
