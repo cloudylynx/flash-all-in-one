@@ -28,6 +28,7 @@ import 'pages/partitions_page.dart';
 import 'pages/perfetto_page.dart';
 import 'pages/plugins_page.dart';
 import 'pages/imgtool_page.dart';
+import 'pages/splash_page.dart';
 import 'pages/recovery_page.dart';
 import 'pages/root_page.dart';
 import 'pages/scripts_page.dart';
@@ -177,6 +178,8 @@ class _MainShellState extends State<MainShell> {
         return const RootPage();
       case 'imgtool':
         return const ImgtoolPage();
+      case 'splash':
+        return const SplashPage();
       case 'ota':
         return const OtaPage();
       case 'recovery':

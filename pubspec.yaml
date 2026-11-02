@@ -13,6 +13,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.5
   archive: ^4.0.7
+  image: ^4.3.0
   shared_preferences: ^2.3.3
   cupertino_icons: ^1.0.8
   window_manager: ^0.4.3
@@ -40,6 +41,8 @@ flutter:
     - assets/tools/windows/rpi/
     - assets/tools/windows/arduino/
     - assets/tools/windows/
+    - assets/tools/windows/reshacker/
+    - assets/tools/windows/reshacker/res/
     - assets/tools/windows/scrcpy/
     - assets/tools/windows/mtk/
     - assets/tools/windows/img/
