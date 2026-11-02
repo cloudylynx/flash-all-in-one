@@ -146,6 +146,19 @@ class DeviceProvider extends ChangeNotifier {
       }
 
 
+
+      // 测试用：GAOJI_AUTO_SELECT=1 自动选第一台可操作设备
+      if (Platform.environment['GAOJI_AUTO_SELECT'] == '1' &&
+          _selectedSerial == null) {
+        final operable = _devices.where((d) => d.isOperable).toList();
+        if (operable.isNotEmpty) {
+          _selectedSerial = operable.first.serial;
+          if (operable.first.isReady) {
+            unawaited(loadDeviceDetails(operable.first.serial));
+          }
+        }
+      }
+
     notifyListeners();
   }
 

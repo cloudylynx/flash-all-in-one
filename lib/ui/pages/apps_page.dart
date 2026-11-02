@@ -126,7 +126,7 @@ class _AppsPageState extends State<AppsPage> {
 
   Future<void> _clearData(AppInfo app) async {
     final ok = await _confirm('清除数据', '确定清除 ${app.packageName} 的所有数据？');
-    if (!ok) return;
+    if (!ok || !mounted) return;
 
     final device = context.read<DeviceProvider>().selectedDevice;
     if (device == null) return;
@@ -148,7 +148,7 @@ class _AppsPageState extends State<AppsPage> {
 
   Future<void> _uninstall(AppInfo app) async {
     final ok = await _confirm('卸载', '确定卸载 ${app.packageName}？');
-    if (!ok) return;
+    if (!ok || !mounted) return;
 
     final device = context.read<DeviceProvider>().selectedDevice;
     if (device == null) return;

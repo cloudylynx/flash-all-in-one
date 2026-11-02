@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/ios_service.dart';
@@ -160,7 +161,7 @@ class _IosPageState extends State<IosPage> {
                       const Divider(height: 16),
                       _action(Icons.camera_alt, '截图', 'idevicescreenshot',
                           () => _run(() => IosService.instance.screenshot(
-                              outputPath: '/tmp/ios-screenshot.png',
+                              outputPath: p.join(Directory.systemTemp.path, 'ios-screenshot.png'),
                               onLine: _addLog))),
                     ],
                   ),
@@ -278,7 +279,7 @@ class _IosPageState extends State<IosPage> {
                       const Divider(height: 16),
                       _action(Icons.backup, '备份设备', 'idevicebackup2',
                           () => _run(() => IosService.instance.backup(
-                              outputDir: '/tmp/ios-backup',
+                              outputDir: p.join(Directory.systemTemp.path, 'ios-backup'),
                               onLine: _addLog))),
                       const Divider(height: 16),
                       _action(Icons.article, '系统日志', 'idevicesyslog',

@@ -49,6 +49,7 @@ class _WirelessPageState extends State<WirelessPage> {
   Future<void> _refreshInfo() async {
     final tcp = await WirelessAdbService.instance.listTcpDevices();
     final subnets = await WirelessAdbService.instance.localSubnets();
+    if (!mounted) return;
 
     final dp = context.read<DeviceProvider>();
     final device = dp.selectedDevice;

@@ -124,14 +124,15 @@ class _FastbootPageState extends State<FastbootPage> {
           child: Row(
             children: [
               const Icon(Icons.flash_on, size: 16, color: AppTheme.warning),
-              const SizedBox(width: 8),
-              Text(
-                _devices.isEmpty
-                    ? '未检测到 fastboot 设备'
-                    : '${_devices.length} 台设备',
-                style: const TextStyle(
-                    fontSize: 12.5, color: AppTheme.textSecondary),
-              ),
+              // 只有检测到设备时才显示数量（空状态已在主区域提示）
+              if (_devices.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '${_devices.length} 台设备',
+                  style: const TextStyle(
+                      fontSize: 12.5, color: AppTheme.textSecondary),
+                ),
+              ],
               if (_devices.length > 1) ...[
                 const SizedBox(width: 14),
                 DropdownButton<String>(

@@ -455,6 +455,7 @@ class PluginService {
 
     // 替换参数里的占位符
     final args = <String>[];
+    final unresolved = <String>{};
     for (final arg in action.args) {
       var resolved = arg;
       // {input:id}
@@ -466,7 +467,26 @@ class PluginService {
       // {toolDir}
       resolved = resolved.replaceAll(
           '{toolDir}', p.join(plugin.dir, 'tools'));
+
+      // 检查残留的 {input:xxx} —— 说明用户没填对应字段
+      for (final m in RegExp(r'\{input:([^}]+)\}').allMatches(resolved)) {
+        unresolved.add(m.group(1)!);
+      }
       args.add(resolved);
+    }
+
+    // 有未填写的必填项时，不把乱码传给工具
+    if (unresolved.isNotEmpty) {
+      final labels = <String>[];
+      for (final id in unresolved) {
+        final inp = plugin.manifest.ui.inputs
+            .where((i) => i.id == id)
+            .firstOrNull;
+        labels.add(inp != null ? '「${inp.label}」' : '「$id」');
+      }
+      add('❌ 还有 ${labels.length} 个参数没填：${labels.join('、')}');
+      add('   请在「参数」区填写后重试。');
+      return PluginResult(false, '参数未填写完整', log);
     }
 
     add('══ ${action.label}');
