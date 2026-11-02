@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../core/config.dart';
+import '../core/input_sanitizer.dart';
 import '../core/process_runner.dart';
 import '../core/tool_extractor.dart';
 
@@ -236,6 +237,11 @@ class PartitionResizeService {
       log.add(s);
       onLine?.call(s);
     }
+    if (!InputSanitizer.isValidDevicePath(disk)) {
+      final reason = InputSanitizer.explainDevicePath(disk);
+      add('❌ 磁盘路径非法: $reason');
+      return ResizeResult(false, '磁盘路径非法: $reason', log);
+    }
 
     if (!await init()) return ResizeResult(false, '工具未就绪', log);
     final exe = _tool('sgdisk');
@@ -269,7 +275,8 @@ class PartitionResizeService {
 
     // 拉回本地
     final savePath = outputPath ??
-        '/tmp/gpt-backup-${DateTime.now().millisecondsSinceEpoch}.bin';
+        p.join(Directory.systemTemp.path,
+            'gpt-backup-${DateTime.now().millisecondsSinceEpoch}.bin');
     add('');
     add('── 拉回本地: ${p.basename(savePath)}');
     final pull = await ProcessRunner.run(
@@ -303,6 +310,11 @@ class PartitionResizeService {
     void add(String s) {
       log.add(s);
       onLine?.call(s);
+    }
+    if (!InputSanitizer.isValidDevicePath(disk)) {
+      final reason = InputSanitizer.explainDevicePath(disk);
+      add('❌ 磁盘路径非法: $reason');
+      return ResizeResult(false, '磁盘路径非法: $reason', log);
     }
 
     if (!confirmed) {
@@ -385,8 +397,14 @@ class PartitionResizeService {
     add('');
     add('── 计算新大小');
 
-    final startSector = int.parse(userdata.startSector);
-    final oldEndSector = int.parse(userdata.endSector);
+    final startSector = int.tryParse(userdata.startSector);
+    final oldEndSector = int.tryParse(userdata.endSector);
+    if (startSector == null || oldEndSector == null) {
+      add('❌ 分区扇区信息异常（sgdisk 输出无法解析）');
+      add('  起始: ${userdata.startSector}');
+      add('  结束: ${userdata.endSector}');
+      return ResizeResult(false, '分区扇区信息异常', log);
+    }
 
     // 读磁盘总扇区数
     final totalOut = await ProcessRunner.run(
@@ -550,6 +568,11 @@ class PartitionResizeService {
     void add(String s) {
       log.add(s);
       onLine?.call(s);
+    }
+    if (!InputSanitizer.isValidDevicePath(disk)) {
+      final reason = InputSanitizer.explainDevicePath(disk);
+      add('❌ 磁盘路径非法: $reason');
+      return ResizeResult(false, '磁盘路径非法: $reason', log);
     }
 
     if (!confirmed) return ResizeResult(false, '需要确认', log);
@@ -753,8 +776,14 @@ class PartitionResizeService {
       return ResizeResult(false, '无法读磁盘大小', log);
     }
 
-    final startSector = int.parse(userdata.startSector);
-    final oldEndSector = int.parse(userdata.endSector);
+    final startSector = int.tryParse(userdata.startSector);
+    final oldEndSector = int.tryParse(userdata.endSector);
+    if (startSector == null || oldEndSector == null) {
+      add('❌ 分区扇区信息异常（sgdisk 输出无法解析）');
+      add('  起始: ${userdata.startSector}');
+      add('  结束: ${userdata.endSector}');
+      return ResizeResult(false, '分区扇区信息异常', log);
+    }
     final maxEndSector = totalSectors - 34; // 留 34 扇区给 GPT 备份表
 
     int newEndSector;

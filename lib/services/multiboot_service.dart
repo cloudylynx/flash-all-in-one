@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../core/config.dart';
+import '../core/input_sanitizer.dart';
 import '../core/process_runner.dart';
 import '../core/tool_extractor.dart';
 
@@ -155,6 +156,13 @@ class MultibootService {
       log.add(s);
       onLine?.call(s);
     }
+    if (!InputSanitizer.isValidDevicePath(disk)) {
+      final reason = InputSanitizer.explainDevicePath(disk);
+      add('❌ 磁盘路径非法: $reason');
+      add('  输入: $disk');
+      return MultibootResult(false, '磁盘路径非法: $reason', log);
+    }
+
 
     if (!await init()) return MultibootResult(false, '插件未安装', log);
     final exe = _tool('parted');
@@ -194,6 +202,13 @@ class MultibootService {
       log.add(s);
       onLine?.call(s);
     }
+    if (!InputSanitizer.isValidDevicePath(disk)) {
+      final reason = InputSanitizer.explainDevicePath(disk);
+      add('❌ 磁盘路径非法: $reason');
+      add('  输入: $disk');
+      return MultibootResult(false, '磁盘路径非法: $reason', log);
+    }
+
 
     if (!confirmed) {
       return MultibootResult(false, '需要确认', log);
@@ -240,8 +255,19 @@ class MultibootService {
       log.add(s);
       onLine?.call(s);
     }
+    if (!InputSanitizer.isValidDevicePath(partition)) {
+      final reason = InputSanitizer.explainDevicePath(partition);
+      add('❌ 分区路径非法: $reason');
+      add('  输入: $partition');
+      return MultibootResult(false, '分区路径非法: $reason', log);
+    }
+
 
     if (!confirmed) return MultibootResult(false, '需要确认', log);
+    if (!InputSanitizer.isValidVolumeLabel(label)) {
+      add('❌ 卷标非法（只能字母数字下划线空格，最多 32 字符）');
+      return MultibootResult(false, '卷标非法', log);
+    }
     if (!await init()) return MultibootResult(false, '插件未安装', log);
 
     final exe = _tool('mkntfs');
@@ -280,6 +306,13 @@ class MultibootService {
       log.add(s);
       onLine?.call(s);
     }
+    if (!InputSanitizer.isValidDevicePath(partition)) {
+      final reason = InputSanitizer.explainDevicePath(partition);
+      add('❌ 分区路径非法: $reason');
+      add('  输入: $partition');
+      return MultibootResult(false, '分区路径非法: $reason', log);
+    }
+
 
     if (!await init()) return MultibootResult(false, '插件未安装', log);
     final exe = _tool('ntfs-3g');
@@ -986,6 +1019,13 @@ class MultibootService {
       log.add(s);
       onLine?.call(s);
     }
+    if (!InputSanitizer.isValidDevicePath(disk)) {
+      final reason = InputSanitizer.explainDevicePath(disk);
+      add('❌ 磁盘路径非法: $reason');
+      add('  输入: $disk');
+      return MultibootResult(false, '磁盘路径非法: $reason', log);
+    }
+
 
     if (!confirmed) return MultibootResult(false, '需要确认', log);
     if (!await init()) return MultibootResult(false, '工具未就绪', log);
@@ -1067,8 +1107,20 @@ class MultibootService {
       log.add(s);
       onLine?.call(s);
     }
+    if (!InputSanitizer.isValidDevicePath(partition)) {
+      final reason = InputSanitizer.explainDevicePath(partition);
+      add('❌ 分区路径非法: $reason');
+      add('  输入: $partition');
+      return MultibootResult(false, '分区路径非法: $reason', log);
+    }
+
 
     if (!confirmed) return MultibootResult(false, '需要确认', log);
+    if (!InputSanitizer.isValidVolumeLabel(label)) {
+      add('❌ 卷标非法（只能字母数字下划线空格，最多 32 字符）');
+      return MultibootResult(false, '卷标非法', log);
+    }
+
     if (!await init()) return MultibootResult(false, '工具未就绪', log);
 
     final adb = await AppConfig.adbPath();

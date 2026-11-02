@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import '../core/config.dart';
 import '../core/process_runner.dart';
 import 'lkpatcher_service.dart';
@@ -71,6 +73,31 @@ class BlUnlockResult {
 class BlUnlockService {
   BlUnlockService._();
   static final BlUnlockService instance = BlUnlockService._();
+
+  /// 清理旧的临时目录（防止 /tmp 累积）
+  ///
+  /// /tmp 在 Linux 上是 tmpfs（吃内存），
+  /// 所以每次操作前先清掉上次残留的目录。
+  void _cleanOldTempDirs() {
+    const prefixes = ['valproto_', 'lkpatch_', 'lkanalyze_', 'rpmb_'];
+    try {
+      final tmp = Directory.systemTemp;
+      for (final e in tmp.listSync()) {
+        if (e is! Directory) continue;
+        final name = p.basename(e.path);
+        if (prefixes.any((pre) => name.startsWith(pre))) {
+          try {
+            // 只清超过 1 小时的（避免误删正在用的）
+            final stat = e.statSync();
+            if (DateTime.now().difference(stat.modified).inHours >= 1) {
+              e.deleteSync(recursive: true);
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
 
   /// 检测当前设备的 BL 锁状态
   ///
@@ -451,6 +478,7 @@ class BlUnlockService {
       return BlUnlockResult(false, 'val-protocol 未就绪', log);
     }
 
+    _cleanOldTempDirs();
     final workDir = Directory.systemTemp.createTempSync('valproto_');
     final lkImg = '${workDir.path}${Platform.pathSeparator}lk.img';
 
@@ -581,6 +609,7 @@ extension LkPatchFlow on BlUnlockService {
       return BlUnlockResult(false, 'mtk.exe 未找到', log);
     }
 
+    _cleanOldTempDirs();
     final workDir = Directory.systemTemp.createTempSync('lkpatch_');
     final lkImg = '${workDir.path}${Platform.pathSeparator}lk.img';
     final patchedImg =
@@ -670,6 +699,7 @@ extension LkPatchFlow on BlUnlockService {
       return BlUnlockResult(false, 'mtk.exe 未找到', log);
     }
 
+    _cleanOldTempDirs();
     final workDir = Directory.systemTemp.createTempSync('lkanalyze_');
     final lkImg = '${workDir.path}${Platform.pathSeparator}lk.img';
 
@@ -721,6 +751,7 @@ extension RpmbBypassFlow on BlUnlockService {
       return BlUnlockResult(false, 'mtk.exe 未找到', log);
     }
 
+    _cleanOldTempDirs();
     final workDir = Directory.systemTemp.createTempSync('rpmb_');
     final lkImg = '${workDir.path}${Platform.pathSeparator}lk.img';
 

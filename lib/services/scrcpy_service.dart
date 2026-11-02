@@ -425,22 +425,39 @@ class ScrcpyService {
   Future<void> _ensureAdbInScrcpyDir() async {
     if (!Platform.isWindows || _dir == null) return;
 
-    final target = File(p.join(_dir!, 'adb.exe'));
-    if (target.existsSync()) return;
+    // 关键：不能只看 adb.exe 存在就跳过。
+    // adb.exe 依赖 AdbWinApi.dll + AdbWinUsbApi.dll，
+    // 缺任一 DLL 会报 "CreateProcessW() error 5"（拒绝访问）
+    const required = ['adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'];
+    final missing = required
+        .where((f) => !File(p.join(_dir!, f)).existsSync())
+        .toList();
+    if (missing.isEmpty) return;
 
+    // 从 AppConfig 的 adb 目录复制
     try {
       final adbPath = await AppConfig.adbPath();
       final src = File(adbPath);
       if (src.existsSync()) {
-        await src.copy(target.path);
-        for (final dll in ['AdbWinApi.dll', 'AdbWinUsbApi.dll']) {
-          final s = File(p.join(src.parent.path, dll));
-          if (s.existsSync()) {
-            await s.copy(p.join(_dir!, dll));
+        for (final name in missing) {
+          final source =
+              name == 'adb.exe' ? src : File(p.join(src.parent.path, name));
+          if (source.existsSync()) {
+            await source.copy(p.join(_dir!, name));
           }
         }
       }
     } catch (_) {}
+
+    // 兜底：从 assets 直接提取（src.parent 可能不含 DLL）
+    for (final name in required) {
+      final target = File(p.join(_dir!, name));
+      if (target.existsSync()) continue;
+      try {
+        final data = await rootBundle.load('assets/tools/windows/$name');
+        await target.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      } catch (_) {}
+    }
   }
 
   /// 启动投屏
