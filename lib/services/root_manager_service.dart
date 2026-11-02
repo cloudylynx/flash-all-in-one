@@ -275,6 +275,17 @@ class RootManagerService {
   ///   ④ 拉回修补后的 new-boot.img
   ///
   /// 不需要设备已 root，只需要 adb shell 能执行
+  ///
+  /// ─────────────────────────────────────────────────────
+  /// ⚠️ 当前 UI 未使用此方法（root_page 走的是 PC 端路线
+  ///    `RootService.patchBoot`，用 PC 上的 magiskboot 本地处理）。
+  ///
+  /// 保留原因：这是设备端修补路线，与 PC 端互补——
+  ///   · PC 端：需要 PC 有 magiskboot，本地快，适合批量
+  ///   · 设备端：只需 adb，适合 PC 缺工具或要把处理放在手机上
+  ///
+  /// 将来若要做「纯 adb 模式 root」，直接接这个即可。
+  /// ─────────────────────────────────────────────────────
   Future<RootInstallResult> patchBoot({
     required String serial,
     required String bootImagePath,

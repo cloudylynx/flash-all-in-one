@@ -1271,4 +1271,207 @@ class MultibootService {
     return MultibootResult(false, '格式化失败', log);
   }
 
+
+  /// 合成「大容量模式」启动镜像（msm.img）
+  ///
+  /// 原理（逆向自 Mindows :MAKEMSMBOOT）：
+  ///   1. magiskboot unpack boot.img        → 拆出 kernel / ramdisk.cpio
+  ///   2. magiskboot cpio "rm /init"        → 删掉原 init
+  ///   3. magiskboot cpio "add 0755 init [msminit.sh]" "add 0755 busybox"
+  ///                                        → 换成自定义 init + busybox
+  ///   4. magiskboot hexpatch kernel \
+  ///        "skip_initramfs" → "want_initramfs"
+  ///                                        → 让内核在 boot 阶段就加载 ramdisk
+  ///   5. magiskboot repack                 → 重新打包成 msm.img
+  ///
+  /// 这个 msm.img 刷进 boot 分区后，开机会：
+  ///   · 把指定分区（如 /dev/sda）通过 USB Mass Storage 暴露给电脑
+  ///   · 电脑上看到的就是一个 U 盘，可以随便读写分区
+  ///
+  /// ⚠️ 刷这个 boot 后设备不能正常进系统，要 restore 回原 boot 才行。
+  Future<MultibootResult> makeMsmBoot({
+    required String bootImage,
+    required String outputPath,
+    String blockDevice = '/dev/sda',
+    void Function(String line)? onLine,
+  }) async {
+    final log = <String>[];
+    void add(String s) {
+      log.add(s);
+      onLine?.call(s);
+    }
+
+    add('══ 合成大容量启动镜像');
+    add('  源 boot: ${p.basename(bootImage)}');
+    add('  输出:    ${p.basename(outputPath)}');
+    add('  暴露分区: $blockDevice');
+    add('');
+
+    final src = File(bootImage);
+    if (!src.existsSync()) {
+      add('❌ 源 boot.img 不存在');
+      return MultibootResult(false, 'boot.img 不存在', log);
+    }
+
+    // 准备工作目录
+    final work = Directory.systemTemp.createTempSync('msmboot_');
+    add('  工作目录: ${work.path}');
+    add('');
+
+    try {
+      // 复用已加载的工具缓存（init() 里已经解出 magiskboot / busybox）
+      if (!await init()) {
+        add('❌ 插件工具未就绪');
+        return MultibootResult(false, '工具未就绪', log);
+      }
+      final mb = _tool('magiskboot');
+      final bbox = _tool('busybox');
+      if (mb == null || bbox == null) {
+        add('❌ 找不到 magiskboot 或 busybox');
+        return MultibootResult(false, '缺少工具', log);
+      }
+
+      // 只有 msminit 脚本需要单独提取
+      final initPath = await ToolExtractor.extractFile(
+        assetPath: 'assets/tools/android/msm/msminit-sda.sh',
+        subDir: 'msm',
+        fileName: 'msminit.sh',
+        executable: true,
+      );
+      if (initPath == null) {
+        add('❌ msminit 脚本提取失败');
+        return MultibootResult(false, '缺少 msminit', log);
+      }
+
+      // msminit 要放进工作目录（cpio add 需要相对路径）
+      final localInit = p.join(work.path, 'msminit.sh');
+      final localBusybox = p.join(work.path, 'busybox');
+      await File(initPath).copy(localInit);
+      await File(bbox).copy(localBusybox);
+      add('  ✅ magiskboot / busybox / msminit 就绪');
+      add('');
+
+      // 复制 boot.img 到工作目录
+      final localBoot = p.join(work.path, 'boot.img');
+      await src.copy(localBoot);
+      add('── 1/5 解包 boot.img');
+      var code = await ProcessRunner.stream(
+        mb, ['unpack', localBoot],
+        onLine: (l) => add('   $l'),
+        workingDirectory: work.path,
+        timeout: const Duration(minutes: 2),
+      );
+      if (code != 0) {
+        add('❌ 解包失败（退出码 $code）');
+        return MultibootResult(false, '解包失败', log);
+      }
+      if (!File(p.join(work.path, 'ramdisk.cpio')).existsSync()) {
+        add('❌ 没有 ramdisk.cpio（这 boot 可能没有 ramdisk）');
+        return MultibootResult(false, '无 ramdisk', log);
+      }
+      add('  ✅ 解包完成');
+
+      // 删除原 init
+      add('');
+      add('── 2/5 移除原 init');
+      code = await ProcessRunner.stream(
+        mb, ['cpio', 'ramdisk.cpio', 'rm /init'],
+        onLine: (l) => add('   $l'),
+        workingDirectory: work.path,
+        timeout: const Duration(minutes: 1),
+      );
+      if (code != 0) {
+        add('  ⚠️ 移除 init 失败（可能本来就没有）');
+      } else {
+        add('  ✅ 已移除');
+      }
+
+      // 加自定义 init + busybox
+      add('');
+      add('── 3/5 注入自定义 init + busybox');
+      code = await ProcessRunner.stream(
+        mb,
+        [
+          'cpio', 'ramdisk.cpio',
+          'add 0755 init msminit.sh',
+          'add 0755 busybox busybox',
+        ],
+        onLine: (l) => add('   $l'),
+        workingDirectory: work.path,
+        timeout: const Duration(minutes: 1),
+      );
+      if (code != 0) {
+        add('❌ 注入失败（退出码 $code）');
+        return MultibootResult(false, '注入 init 失败', log);
+      }
+      add('  ✅ 已注入');
+
+      // hexpatch kernel
+      add('');
+      add('── 4/5 修改内核（skip_initramfs → want_initramfs）');
+      add('   让内核在 boot 阶段就加载 ramdisk，才能跑我们的 init');
+      code = await ProcessRunner.stream(
+        mb,
+        [
+          'hexpatch', 'kernel',
+          '736B69705F696E697472616D6673', // skip_initramfs
+          '77616E745F696E697472616D6673', // want_initramfs
+        ],
+        onLine: (l) => add('   $l'),
+        workingDirectory: work.path,
+        timeout: const Duration(minutes: 1),
+      );
+      if (code != 0) {
+        add('  ⚠️ hexpatch 失败（内核可能没有这个字符串，或已被改过）');
+        add('     不影响后续打包，但开机可能不会进大容量模式');
+      } else {
+        add('  ✅ 内核已修改');
+      }
+
+      // 重新打包
+      add('');
+      add('── 5/5 重新打包');
+      final outName = 'msm.img';
+      code = await ProcessRunner.stream(
+        mb, ['repack', localBoot, outName],
+        onLine: (l) => add('   $l'),
+        workingDirectory: work.path,
+        timeout: const Duration(minutes: 2),
+      );
+      if (code != 0) {
+        add('❌ 打包失败（退出码 $code）');
+        return MultibootResult(false, '打包失败', log);
+      }
+
+      final built = File(p.join(work.path, outName));
+      if (!built.existsSync()) {
+        add('❌ 打包后找不到 $outName');
+        return MultibootResult(false, '输出文件缺失', log);
+      }
+
+      // 拷到目标位置
+      await built.copy(outputPath);
+      final sizeMb = (File(outputPath).lengthSync() / 1024 / 1024)
+          .toStringAsFixed(2);
+
+      add('  ✅ 打包完成');
+      add('');
+      add('✅ 已生成 ${p.basename(outputPath)}（$sizeMb MB）');
+      add('');
+      add('使用方法：');
+      add('  1. fastboot flash boot ${p.basename(outputPath)}');
+      add('  2. 重启，手机就会变成一个 USB 移动硬盘');
+      add('  3. 电脑上可以直接读写分区（慎用 dd）');
+      add('  4. 用完刷回原来的 boot.img 才能正常开机');
+      add('');
+      add('⚠️ 刷这个 boot 后设备不能正常进系统！');
+
+      return MultibootResult(true, '已生成 msm.img', log);
+    } finally {
+      try {
+        work.deleteSync(recursive: true);
+      } catch (_) {}
+    }
+  }
+
 }

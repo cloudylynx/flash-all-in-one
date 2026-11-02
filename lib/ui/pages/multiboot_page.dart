@@ -732,6 +732,40 @@ class _MultibootPageState extends State<MultibootPage> {
                         style: TextStyle(
                             fontSize: 10.5, color: AppTheme.textMuted),
                       ),
+
+                      const SizedBox(height: 14),
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '大容量模式（把手机变成 USB 移动硬盘）',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        '合成一个特殊 boot，刷进去后开机会把分区通过 USB '
+                        '暴露给电脑，电脑上直接读写分区（慎用 dd）。\n'
+                        '⚠️ 刷这个 boot 后设备不能正常进系统，用完要刷回原 boot。',
+                        style: TextStyle(
+                            fontSize: 10.5,
+                            color: AppTheme.textMuted,
+                            height: 1.5),
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _makeMsmBoot,
+                        icon: const Icon(Icons.usb, size: 15),
+                        label: const Text('合成大容量 Boot（msm.img）',
+                            style: TextStyle(fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.warning,
+                          side: BorderSide(
+                              color: AppTheme.warning.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -976,6 +1010,68 @@ class _MultibootPageState extends State<MultibootPage> {
       _log.clear();
     });
     final r = await action(dir);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');
+  }
+
+  /// 合成大容量 Boot（msm.img）
+  Future<void> _makeMsmBoot() async {
+    // 1. 选源 boot.img
+    final src = await FilePicker.platform.pickFiles(
+      dialogTitle: '选择要修改的 boot.img（原厂 boot 或已 root 的）',
+      type: FileType.any,
+    );
+    if (src == null || src.files.single.path == null) return;
+
+    // 2. 选输出位置
+    final save = await FilePicker.platform.saveFile(
+      dialogTitle: '保存 msm.img',
+      fileName: 'msm.img',
+      type: FileType.any,
+    );
+    if (save == null) return;
+
+    // 3. 确认（这是危险操作）
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⚠️ 合成大容量 Boot'),
+        content: const Text(
+          '会生成一个特殊的 boot.img，刷进去后：\n'
+          '· 开机会把 /dev/sda 通过 USB 暴露成移动硬盘\n'
+          '· 电脑上可直接读写分区（慎用 dd）\n'
+          '· 设备不能正常进系统\n\n'
+          '用完必须刷回原来的 boot.img 才能正常开机。\n\n'
+          '确定继续？',
+          style: TextStyle(fontSize: 12.5, height: 1.6),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.warning),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('生成')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() {
+      _busy = true;
+      _log.clear();
+    });
+
+    final r = await MultibootService.instance.makeMsmBoot(
+      bootImage: src.files.single.path!,
+      outputPath: save,
+      blockDevice: '/dev/sda',
+      onLine: _addLog,
+    );
+
     if (!mounted) return;
     setState(() => _busy = false);
     _addLog(r.ok ? '✅ ${r.message}' : '❌ ${r.message}');

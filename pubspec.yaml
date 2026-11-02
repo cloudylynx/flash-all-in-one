@@ -70,6 +70,7 @@ flutter:
     - assets/tools/apk/
     - assets/tools/android/multiboot/
     - assets/tools/android/magisk/
+    - assets/tools/android/msm/
     - assets/tools/kernelsu/
     - assets/tools/ghostlock/
     - assets/tools/ghostlock/profiles/
