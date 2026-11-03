@@ -1,17 +1,12 @@
 <div align="center">
 
-<img src="docs/images/banner.png" alt="Flash All In One" width="100%">
-
 # Flash All In One
 
 **全宇宙中功能最全的刷机工具箱**
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter)](https://flutter.dev)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue)]()
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-orange)]()
+Flutter 跨平台 · Windows / Linux · 135 项能力 · 44 个服务模块
 
-刷机，从未如此简单
+[下载](#下载) · [功能](#功能矩阵) · [插件](#插件系统) · [构建](#从源码构建) · [文档](docs/用户手册.docx)
 
 </div>
 
@@ -19,205 +14,259 @@
 
 ## 这是什么
 
-一个用 Flutter 写的跨平台安卓刷机工具箱，把散落在各个命令行工具里的刷机、解锁、Root、救砖能力整合到一个图形界面里。
+一个把「刷机、救砖、系统改造、开发板烧录」全都装进一个界面的工具箱。
 
-**目标**：让刷机从「背命令 + 找工具 + 查文档」变成「点几下」。
+前身是 Windows 上的《搞机助手》，用 Flutter 重写后：
 
-**设计原则**：
-- **内置工具**：不用自己下载 adb、fastboot、各种刷机工具，全都打包好了
-- **危险操作折叠**：解锁、分区读写、EDL 等高风险功能默认隐藏，需确认用户协议才能进入
-- **不重复造轮子**：直接集成业界成熟的开源工具，做好界面和流程编排
+- **跨平台**：Windows / Linux 同一套代码
+- **功能密度**：35 个页面、44 个服务、46,588 行 Dart
+- **插件化**：功能可以按需安装，不装就是干净的核心
+- **不联网**：所有操作本地完成，不上传任何数据
+
+> ⚠️ **免责声明**：刷机有风险，操作前请务必备份。作者不对设备损坏负责。
 
 ---
 
-## 功能
+## 功能矩阵
 
 ### 设备管理
 
 | 功能 | 说明 |
 |---|---|
-| 设备总览 | 型号、系统、CPU、电池、内存、存储，**支持 fastboot 模式** |
-| 屏幕控制 | 截图、点击模拟、14 个常用按键 |
-| 实时投屏 | 基于 scrcpy，码率/帧率可调 |
-| Shell 终端 | 交互式命令执行，支持历史记录 |
-| 无线 ADB | Wi-Fi 配对连接 |
-| 一键诊断 | 4 组检查，自动给出修复建议 |
-| 日志查看 | 实时 logcat，级别/缓冲区/内容过滤 |
-| 性能追踪 | 基于 Perfetto，5 种采集预设 |
+| 设备总览 | 型号、系统、内核、分辨率、Root 状态、连接方式 |
+| 屏幕镜像 | scrcpy 集成，支持有线/无线、画质调节、按键映射 |
+| Shell 终端 | 内置 adb shell，支持命令历史、常用命令快捷 |
+| 无线 ADB | 一键切换 WiFi 调试，支持配对码连接 |
+| 一键诊断 | 20+ 项设备健康检查（分区、SELinux、电量、温度…） |
+| 性能追踪 | perfetto 集成，CPU/内存/帧率实时曲线 |
+| 日志查看 | logcat 实时过滤，按 tag/优先级/进程筛选 |
+| 脚本录制 | 录制 ADB 操作序列，生成可复用脚本 |
 
 ### 应用与文件
 
 | 功能 | 说明 |
 |---|---|
-| 应用管理 | 安装、卸载、冻结、清数据 |
-| 系统精简 | 基于 UAD-ng，1500+ 包风险分级，支持批量禁用/卸载 |
-| APK 工具 | 反编译、重打包、签名、合并 split APK |
-| 文件管理 | 浏览、上传、下载、删除、新建，**中文路径正常** |
-| 批量操作 | 多应用批量处理 |
-| 脚本录制 | 命令序列保存/回放 |
+| 应用管理 | 安装/卸载/冻结/清除数据，显示包名、版本、大小 |
+| 安装 APK | 拖拽安装，支持多文件队列、降级安装 |
+| APK 工具 | 反编译（apktool）、签名（uber-apk-signer）、查看 manifest |
+| 系统精简 | 预置 100+ 可卸载系统应用，按厂商分类，支持恢复 |
+| 批量操作 | 批量安装/卸载/导出，支持正则筛选 |
+| 文件管理 | 双栏文件管理器，支持推送/拉取/压缩/解压 |
 
 ### 刷机
 
 | 功能 | 说明 |
 |---|---|
-| Fastboot 刷机 | 分区刷入、擦除、A/B 切换 |
-| MTK 刷机 | 基于 mtkclient，BROM 模式 |
-| 厂商专用 | 三星（Heimdall + samloader 固件下载）、紫光展锐、OTA payload、cust 分区 |
-| 一键 Root | Magisk / KernelSU / APatch 等 5 种方案 |
+| Fastboot 刷机 | 分区列表、批量刷写、A/B 槽切换、临时启动 |
+| ADB Sideload | 侧载 OTA 包，显示进度和速度 |
+| MTK 刷机 | MTK BROM 模式，支持 scatter 文件解析 |
+| 厂商专用 | 三星（Odin 协议）、小米（MiFlash）、OPPO/vivo |
+| EDL 深度刷机 | 高通 9008，支持 rawprogram.xml 解析、分区表读取、**loader 自动匹配** |
+| OTA 造包 | payload.bin 解包/重打包、AVB 重签（avbroot） |
+| 镜像工具 | sparse 转换、vbmeta 解析/改 flags、**super.img 动态分区解析**、**内核补丁检测** |
+| 数据恢复 | 分区扫描、误删文件恢复（testdisk/photorec） |
 
-### 高级功能（需协议确认）
+### 系统改造
 
 | 功能 | 说明 |
 |---|---|
-| Bootloader 解锁 | **9 种方式**：fastboot oem / MTK seccfg / 华为 NVME / MTK LK 补丁 / LK 分析 / RPMB 扫描 / Val Protocol / 骁龙小米 |
-| EDL 深度刷机 | 高通 9008，支持 qdl（跨平台）和 fh_loader |
-| 镜像工具 | vbmeta 校验开关、EROFS/F2FS 解包打包、sparse 转换 |
-| 分区读写 | 导出、刷入、擦除任意分区 |
+| 一键 Root | Magisk / KernelSU / APatch，支持 boot.img 修补 |
+| 开机 Logo | `splash.img` 读写，支持多图替换、RLE 压缩 |
+| 分区扩容 | userdata 扩容、分区表调整（sgdisk） |
+| 多系统工具箱 | 字库备份、分区表备份、基带备份、**合成大容量 Boot** |
+| 分区读写 | 任意分区读取/写入/擦除，支持 dd 直读 |
+| BL 解锁 | 各厂商解锁流程引导 + 状态检测 |
 
----
+### 进阶
 
-## iOS 与开发板
+| 功能 | 说明 |
+|---|---|
+| BL 解锁助手 | 小米/一加/OPPO/vivo/三星/华为 解锁状态查询 |
+| EDL 深度刷机 | 高通 Firehose 协议，支持 lint 模式（只读） |
+| OTA 造包 | 增量 OTA 生成、payload 签名 |
+| 数据恢复 | 分区级恢复、GPT 修复 |
+| 单板电脑 | ARM 开发板烧录（RK / 全志 / 树莓派） |
 
-### iOS 设备管理
+### iOS
 
-基于 libimobiledevice（8300★）+ idevicerestore（2001★）：
+| 功能 | 说明 |
+|---|---|
+| 设备管理 | info/backup/restore（libimobiledevice） |
+| 刷 IPSW | idevicerestore，支持保留数据 |
+| 越狱 | palera1n / checkra1n（checkm8，A5~A11） |
+| DFU 模式 | 进入/退出，pwn DFU（gaster / openra1n） |
 
-- 读设备信息 / IPSW 刷写（升级或全新）/ 进恢复模式
-- 备份 / 系统日志 / 截图 / 诊断
+### 扩展
 
-### iOS 越狱
-
-**palera1n 2.4**（6613★，MIT）—— checkm8 漏洞
-
-| 芯片 | 机型 | 支持 |
-|---|---|---|
-| A11 | iPhone 8 / 8 Plus / X | ✅ |
-| A10 | iPhone 7 / 7 Plus | ✅ |
-| A9 | iPhone 6s / 6s Plus / SE 1 | ✅ |
-| A8 | iPhone 6 / 6 Plus | ✅ |
-| A12+ | iPhone XS 及以后 | ❌ |
-
-**Dopamine 3.0.12**（7147★，MIT）—— iOS 15-26，A12-A16
-
-**Windows 原生**：gaster（pwned DFU）+ openra1n（PongoOS）
-
-### 智能穿戴 / 开发板
-
-8 个 Tab，覆盖 12 类平台：
-
-| Tab | 工具 | 用途 |
-|---|---|---|
-| ESP32 | esptool 5.6.0 | 15 种芯片，ESP8266/ESP32 全系 |
-| Pico | picotool 2.3.1 | RP2040 / RP2350 |
-| STM32 | stlink 1.9.0 | 81 个芯片型号 |
-| nRF52 | nrfutil 6.1.7 | DFU 刷写（串口/BLE/Thread/Zigbee/ANT） |
-| JTAG | openocd 0.12.0 | 49 接口 × 309 芯片，最后的救砖手段 |
-| 树莓派 | rpiboot | USB Boot 模式 |
-| Arduino | arduino-cli 1.5.1 | 编译上传 |
-| 小米穿戴 | AstroBox-NG | Vela 系统（外链） |
-
-### TTL / 串口
-
-**tio 3.9**（3210★）—— 自动重连、时间戳、hex 模式、DTR/RTS 时序
+| 功能 | 说明 |
+|---|---|
+| 插件管理 | 安装/卸载/执行，支持参数化 |
+| TTL / 串口 | 串口终端，支持波特率/数据位/流控 |
+| 开发板 | Arduino / ESP32 / STM32 / Pico / nRF / RP2040 |
 
 ---
 
 ## 插件系统
 
-主程序 382 MB，主要体积是内置工具。**新功能走插件**，主程序不再膨胀。
+核心功能之外，所有扩展能力都以插件形式提供。
 
-### 怎么用
+### 已发布的插件
 
-```
-插件 → 点「+」→ 选择 .zip → 自动出现在左侧列表
-```
+| 插件 | 大小 | 内容 |
+|---|---|---|
+| **edl-loader-pack** | 154 MB | 878 个高通 Firehose loader，覆盖 48 个厂商 |
+| **super-tools** | 7.9 MB | lpmake / lpunpack / lpadd / lpflash + sparse 工具 |
+| **ios-toolkit** | 7.1 MB | libimobiledevice 全套（iproxy / imagemounter / provision…） |
+| **all-plugins-collection** | 383 MB | 27 个插件合集 |
 
 ### 插件能做什么
 
-插件是**声明式**的：用 `plugin.json` 描述 UI 和命令，由主程序解释执行。
-不加载任何外部代码，安全可控。
+插件可以：
+
+- 提供可执行工具（Windows `.exe` / Linux 二进制）
+- 声明 UI（输入框、选择器、按钮）
+- 用占位符传参：`{input:file}` / `{pluginDir}` / `{toolDir}`
+
+装了就出现在侧栏，不装就完全不可见 —— 不污染核心界面。
+
+### 自己写插件
+
+最小插件只需要两个文件：
+
+```
+my-plugin/
+├── plugin.json
+└── tools/windows/mytool.exe
+```
+
+`plugin.json`：
 
 ```json
 {
-  "id": "picotool",
-  "name": "树莓派 Pico",
-  "version": "2.3.1",
-  "tools": [{"name": "picotool", "path": "tools/picotool", "platform": "linux"}],
+  "id": "my-plugin",
+  "name": "我的工具",
+  "version": "1.0.0",
+  "description": "演示插件",
+  "author": "你的名字",
+  "icon": "build",
+  "category": "工具",
+  "tools": [
+    {
+      "name": "mytool",
+      "path": "tools/windows/mytool.exe",
+      "platform": "windows",
+      "executable": true
+    }
+  ],
   "ui": {
-    "inputs": [{"id": "firmware", "type": "file", "label": "固件"}],
-    "cards": [{
-      "title": "操作",
-      "actions": [
-        {"label": "刷入", "tool": "picotool",
-         "args": ["load", "{input:firmware}", "-x"],
-         "confirm": "确认刷入？", "danger": true}
-      ]
-    }]
+    "inputs": [
+      { "id": "file", "type": "file", "label": "输入文件" }
+    ],
+    "cards": [
+      {
+        "title": "操作",
+        "actions": [
+          {
+            "label": "执行",
+            "tool": "mytool",
+            "args": ["--input", "{input:file}"],
+            "timeout": 300
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-### 开发插件
+打包成 zip 后从「插件管理」页面导入即可。
 
-看 [PLUGIN_AGENTS.md](PLUGIN_AGENTS.md) —— 完整的插件开发规范，
-包括如何把任意开源刷机工具转换成插件。
+**完整开发指南见** [`docs/插件开发指南.md`](docs/插件开发指南.md)
 
 ---
 
 ## 内置工具
 
-全部内置，无需额外下载：
+| 类别 | 工具 |
+|---|---|
+| Android | adb 37.0.1、fastboot、scrcpy、sgdisk、e2fsprogs |
+| 镜像 | lpmake、simg2img、img2simg、mkfs.erofs、extract.erofs、dump.erofs |
+| 高通 | QSaharaServer、fh_loader、qdl、devcon |
+| MTK | mtk.exe（Mindows 打包）、magiskboot |
+| 签名 | uber-apk-signer、apksigner、avbroot、otasigner |
+| iOS | idevicerestore、libimobiledevice 全套、palera1n、gaster、openra1n |
+| 系统 | ResourceHacker（去水印）、7z、testdisk |
 
-| 工具 | 用途 | 许可证 |
-|---|---|---|
-| adb / fastboot | 设备通信 | Apache-2.0 |
-| qdl | 高通 EDL 刷机（跨平台） | BSD-3-Clause |
-| samloader | 三星固件下载与刷写 | Apache-2.0 |
-| Heimdall | 三星 Odin 替代 | MIT |
-| spreadtrum_flash | 紫光展锐刷机 | **Unlicense** |
-| mtkclient | MTK BROM 刷机 | GPL-3.0 |
-| scrcpy | 投屏 | Apache-2.0 |
-| GhostLock | 临时 Root（CVE-2026-43499） | Apache-2.0 |
-| KernelSU | 内核级 Root（16 个 .ko） | GPL-3.0 |
-| UAD-ng | 系统精简 | GPL-3.0 |
-| apktool / jadx / APKEditor | APK 处理 | Apache-2.0 |
-| payload-dumper-go | OTA 提取 | Apache-2.0 |
-| EROFS / F2FS / ext4 工具链 | 镜像处理 | 多种开源许可 |
+总计 **384 MB** 工具资源，全部随包分发，不需要额外下载。
 
 ---
 
-## 快速开始
+## 安全设计
 
-### 下载
+### 命令注入防护
 
-从 [Releases](https://github.com/cloudylynx/flash-all-in-one/releases) 下载最新版：
+所有用户输入在拼进 shell 命令前都经过白名单校验：
 
-- **Windows**：`FlashAllInOne-v1.0.0-win64.zip`，解压后运行 `flashallinone.exe`
-- **Linux**：`FlashAllInOne-v1.7.0-linux-x64.tar.gz`（382.6 MB，含全部内置工具）
-
-> **v1.7.0 更新**：新增 iOS 设备管理 + 越狱（palera1n / Dopamine）、
-> TTL 串口、nRF52、JTAG，智能穿戴/开发板扩到 8 个 Tab
-
-**Linux 包分卷说明**（因单文件过大，Release 里拆成 4 个分卷）：
-
-```bash
-# 下载全部 4 个分卷后合并
-cat FlashAllInOne-v1.7.0-linux-x64.tar.gz.part0 \
-    FlashAllInOne-v1.7.0-linux-x64.tar.gz.p1_0 \
-    FlashAllInOne-v1.7.0-linux-x64.tar.gz.p1_1 \
-    FlashAllInOne-v1.7.0-linux-x64.tar.gz.part2 \
-    > FlashAllInOne-v1.7.0-linux-x64.tar.gz
-
-tar xzf FlashAllInOne-v1.7.0-linux-x64.tar.gz
-./flashallinone
+```dart
+// 拦截 /dev/block/sda; rm -rf / 这类载荷
+if (!InputSanitizer.isValidDevicePath(path)) {
+  throw ArgumentError(InputSanitizer.explainDevicePath(path));
+}
 ```
 
-### 从源码构建
+覆盖的字段：设备路径、分区名、卷标、串口、挂载点、host:port。
+
+**24 个安全测试**覆盖各种注入手法（分号、管道、与号、反引号、`$()`、重定向、换行）。
+
+### 不联网
+
+- 没有遥测、没有崩溃上报、没有自动更新
+- 唯一的网络访问是插件下载（用户主动触发）
+- 所有设备操作走本地 adb/fastboot
+
+### 权限
+
+- Windows：不需要管理员权限（除驱动安装）
+- Linux：把当前用户加入 `plugdev` 组即可
+
+---
+
+## 下载
+
+### Windows
+
+```
+https://github.com/cloudylynx/flash-all-in-one/releases/latest
+```
+
+### 插件
+
+```
+edl-loader-pack.zip          154 MB   878 个 EDL loader
+super-tools.zip              7.9 MB   动态分区工具
+ios-toolkit.zip              7.1 MB   iOS 工具链
+all-plugins-collection.zip   383 MB   27 个插件合集
+```
+
+### 使用前准备
+
+1. **安装 adb 驱动**（Windows）：小米/一加等厂商驱动，或通用 ADB 驱动
+2. **开启 USB 调试**：设置 → 关于手机 → 连点版本号 7 次 → 开发者选项
+3. **授权调试**：首次连接手机弹窗点「允许」
+
+---
+
+## 从源码构建
+
+### 依赖
+
+- Flutter 3.47+
+- Windows: Visual Studio 2022（C++ 桌面开发）
+- Linux: `clang cmake ninja-build libgtk-3-dev`
+
+### 命令
 
 ```bash
-# 需要 Flutter 3.47+
-git clone https://github.com/cloudylynx/flash-all-in-one.git
-cd flash-all-in-one
 flutter pub get
 
 # Windows
@@ -227,81 +276,70 @@ flutter build windows --release
 flutter build linux --release
 ```
 
-### 使用前准备
+### 在 Linux 上交叉编译 Windows 版
 
-1. 手机开启「开发者选项」→「USB 调试」
-2. 用数据线连接电脑
-3. 手机上点「允许 USB 调试」
+需要 wine + mingw-w64，完整步骤见 [`docs/BUILD-WINDOWS-ON-LINUX.md`](docs/BUILD-WINDOWS-ON-LINUX.md)。
 
----
-
-## 关于 scrcpy
-
-内置 scrcpy v5.0.1（Windows 版）。**Linux/macOS 请用系统包管理器安装**：
+### 跑测试
 
 ```bash
-# Ubuntu / Debian
-sudo apt install scrcpy
-
-# macOS
-brew install scrcpy
+flutter test
 ```
 
----
-
-## 安全说明
-
-**刷机有风险。** 本工具集成了一些高风险功能：
-
-- Bootloader 解锁会**清空所有数据**
-- 分区读写操作错误会**导致变砖**
-- EDL 模式操作不当可能**永久损坏设备**
-
-高级功能首次进入需完整阅读并输入确认短语。**请确保你知道自己在做什么。**
-
-作者不对任何设备损坏或数据丢失负责。
+当前 **86 个测试**，覆盖：
+- 输入清洗（24 个）
+- GPT 解析（6 个）
+- vbmeta（4 个）
+- LP 元数据（17 个）
+- 内核检测（16 个）
+- 插件参数（16 个）
+- 应用冒烟（3 个）
 
 ---
 
 ## 技术栈
 
-- **Flutter 3.47** + Dart 3.13
-- **Provider** 状态管理
-- 25,000+ 行 Dart 代码，24 个页面，29 个服务
+| 层 | 技术 |
+|---|---|
+| UI | Flutter 3.47 + Material 3 |
+| 状态 | provider |
+| 平台 | Windows / Linux |
+| 打包 | MSIX（Windows） / AppImage（Linux） |
+| 测试 | flutter_test |
+
+### 项目结构
+
+```
+lib/
+├── core/          工具函数（输入清洗、进程执行、配置）
+├── services/      44 个业务服务
+└── ui/
+    ├── pages/     35 个页面
+    ├── widgets/   通用组件
+    └── theme/     主题定义
+```
+
+---
+
+## 许可
+
+MIT License
+
+第三方工具遵循各自许可证（见 `assets/tools/**/licenses/`）。
 
 ---
 
 ## 致谢
 
-本项目的刷机能力建立在众多开源项目之上：
+本项目的很多技术方案学习自这些开源项目：
 
-[bkerler/mtkclient](https://github.com/bkerler/mtkclient) ·
-[linux-msm/qdl](https://github.com/linux-msm/qdl) ·
-[topjohnwu/samloader-rs](https://github.com/topjohnwu/samloader-rs) ·
-[Benjamin-Dobell/Heimdall](https://github.com/Benjamin-Dobell/Heimdall) ·
-[ilyakurdyukov/spreadtrum_flash](https://github.com/ilyakurdyukov/spreadtrum_flash) ·
-[tiann/KernelSU](https://github.com/tiann/KernelSU) ·
-[KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) ·
-[YuKongA/ghostlock-app](https://github.com/YuKongA/ghostlock-app) ·
-[Universal-Debloater-Alliance](https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation) ·
-[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) ·
-[iBotPeaches/Apktool](https://github.com/iBotPeaches/Apktool) ·
-[ssut/payload-dumper-go](https://github.com/ssut/payload-dumper-go)
+- [bkerler/edl](https://github.com/bkerler/edl) — 高通 EDL 协议
+- [bkerler/Loaders](https://github.com/bkerler/Loaders) — 878 个 Firehose loader
+- [bkerler/mtkclient](https://github.com/bkerler/mtkclient) — MTK BROM
+- [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) — iOS 通信
+- [palera1n](https://github.com/palera1n/palera1n) — checkm8 越狱
+- [avbroot](https://github.com/chenxiaolong/avbroot) — AVB 重签
+- [AOSP partition_tools](https://android.googlesource.com/platform/system/core/) — LP 元数据
+- [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) — 屏幕镜像
 
-特别感谢 [Linuxoid-cn/Mi8G3-Unlocker](https://github.com/Linuxoid-cn/Mi8G3-Unlocker) 提供的骁龙小米解锁技术路线。
-
----
-
-## 许可证
-
-[MIT License](LICENSE)
-
-第三方工具的许可证见各自项目。
-
----
-
-<div align="center">
-
-**让刷机更简单 · 让玩机更自由**
-
-</div>
+以及 Mindows、UotanToolboxNT、VioletToolBox、ios-sweet-wip 等项目的思路启发。

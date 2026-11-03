@@ -572,4 +572,48 @@ class PluginService {
       }
     });
   }
+
+  /// ★ 替换参数里的占位符（抽成静态方法便于单测）
+  ///
+  /// 支持的占位符：
+  ///   {input:id}   → 用户填的值
+  ///   {pluginDir}  → 插件目录绝对路径
+  ///   {toolDir}    → 插件工具目录绝对路径
+  ///
+  /// 返回 (解析后的参数列表, 未填写的字段 id 集合)
+  ///
+  /// 未填写的字段不会被替换，留在结果里供调用方检测。
+  static (List<String>, Set<String>) resolveArgs({
+    required List<String> args,
+    required Map<String, String> inputs,
+    required String pluginDir,
+    required String toolDir,
+  }) {
+    final out = <String>[];
+    final unresolved = <String>{};
+
+    for (final raw in args) {
+      var resolved = raw;
+
+      // 按 key 长度降序替换，避免 {input:a} 被 {input:ab} 干扰
+      final keys = inputs.keys.toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+      for (final k in keys) {
+        resolved = resolved.replaceAll('{input:$k}', inputs[k]!);
+      }
+
+      resolved = resolved.replaceAll('{pluginDir}', pluginDir);
+      resolved = resolved.replaceAll('{toolDir}', toolDir);
+
+      // 检查残留的 {input:xxx}
+      for (final m in RegExp(r'\{input:([^}]+)\}').allMatches(resolved)) {
+        unresolved.add(m.group(1)!);
+      }
+
+      out.add(resolved);
+    }
+
+    return (out, unresolved);
+  }
+
 }

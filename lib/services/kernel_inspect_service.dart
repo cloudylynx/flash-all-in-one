@@ -190,9 +190,12 @@ class KernelInspectService {
   ///
   /// `b` 的编码：bits[31:26] = 0b000101
   /// 即 `(insn & 0xFC000000) == 0x14000000`
-  /// 简化判断：最高字节 == 0x14
+  ///
+  /// ⚠️ 不能只看最高字节：向前跳（正偏移）最高字节是 0x14，
+  /// 向后跳（负偏移）最高字节是 0x15~0x17（因为 imm26 的高位全 1）。
+  /// 例如 `b -16` = 0x17FFFFFC。
   bool _isBranch(int insn) {
-    return (insn >> 24) == arm64BranchOpcode;
+    return (insn & 0xFC000000) == 0x14000000;
   }
 
   /// 解析 `b` 指令的跳转目标（相对偏移）
