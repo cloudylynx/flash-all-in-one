@@ -8,6 +8,7 @@ import '../../core/config.dart';
 import '../../services/device_provider.dart';
 import '../../services/f2fs_service.dart';
 import '../../services/image_service.dart';
+import '../../services/kernel_inspect_service.dart';
 import '../../services/lp_metadata_service.dart';
 import '../../services/vbmeta_service.dart';
 import '../theme/app_theme.dart';
@@ -34,6 +35,9 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
 
   /// 动态分区元数据（super.img 才有）
   LpMetadata? _lpMeta;
+
+  /// 内核分析结果
+  KernelInfo? _kernelInfo;
   bool _busy = false;
   String _mode = 'vbmeta_disable';
   final List<String> _log = [];
@@ -54,12 +58,14 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
     var fmt = await ImageService.instance.detectFormat(path);
     final vb = await VbmetaService.instance.parse(path);
     final lp = await LpMetadataService.instance.parseFile(path);
+    final ki = await KernelInspectService.instance.inspect(path);
     if (!mounted) return;
     setState(() {
       _imagePath = path;
       _format = fmt;
       _vbmetaInfo = vb;
       _lpMeta = lp;
+      _kernelInfo = ki;
     });
   }
 
@@ -92,6 +98,8 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
 
     // 动态分区（super.img）
     final lp = await LpMetadataService.instance.parseFile(path);
+    // 内核分析
+    final ki = await KernelInspectService.instance.inspect(path);
 
     // 额外检测 F2FS
     if (fmt == ImageFormat.raw || fmt == ImageFormat.unknown) {
@@ -104,6 +112,7 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
     setState(() {
       _imagePath = path;
       _lpMeta = lp;
+      _kernelInfo = ki;
       _format = fmt;
       _vbmetaInfo = vb;
     });
@@ -310,6 +319,79 @@ class _ImgtoolPageState extends State<ImgtoolPage> {
                   ),
                   const SizedBox(height: 14),
                 ],
+
+                // ★ 内核分析（ARM64 入口指令检测）
+                if (_kernelInfo != null) ...[
+                  AppCard(
+                    title: '内核分析',
+                    trailing:
+                        _chip(_kernelInfo!.format.label, AppTheme.accent),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _kernelInfo!.canPatch
+                                  ? Icons.check_circle
+                                  : (_kernelInfo!.alreadyPatched
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.info_outline),
+                              size: 15,
+                              color: _kernelInfo!.canPatch
+                                  ? AppTheme.success
+                                  : AppTheme.warning,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _kernelInfo!.reason,
+                                style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: AppTheme.textSecondary,
+                                    height: 1.45),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_kernelInfo!.headerOffset > 0) ...[
+                          const SizedBox(height: 8),
+                          InfoRow(
+                              label: '头部偏移',
+                              value: '${_kernelInfo!.headerOffset} 字节',
+                              monospace: true),
+                        ],
+                        if (_kernelInfo!.patches.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          const Divider(height: 1),
+                          const SizedBox(height: 8),
+                          for (final patch in _kernelInfo!.patches)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                children: [
+                                  _chip(patch.kind.label, AppTheme.warning),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '0x${patch.offset.toRadixString(16)}: '
+                                      '0x${patch.original.toRadixString(16).padLeft(8, "0")}',
+                                      style: const TextStyle(
+                                          fontSize: 10.5,
+                                          fontFamily: 'monospace',
+                                          color: AppTheme.textMuted),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
 
                 // ★ 动态分区（super.img）
                 if (_lpMeta != null) ...[

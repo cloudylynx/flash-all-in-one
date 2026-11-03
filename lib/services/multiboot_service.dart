@@ -6,6 +6,7 @@ import '../core/config.dart';
 import '../core/input_sanitizer.dart';
 import '../core/process_runner.dart';
 import '../core/tool_extractor.dart';
+import 'kernel_inspect_service.dart';
 
 /// 多系统操作结果
 class MultibootResult {
@@ -1370,6 +1371,29 @@ class MultibootService {
         return MultibootResult(false, '无 ramdisk', log);
       }
       add('  ✅ 解包完成');
+
+      // ── 内核状态检查（学习自 DualBootOneClick 的 InspectKernel）──
+      final kernelFile = File(p.join(work.path, 'kernel'));
+      if (kernelFile.existsSync()) {
+        add('');
+        add('── 内核状态检查');
+        final kInfo = await KernelInspectService.instance
+            .inspect(kernelFile.path);
+        if (kInfo != null) {
+          add('   格式: ${kInfo.format.label}');
+          if (kInfo.headerOffset > 0) {
+            add('   头部: 跳过 ${kInfo.headerOffset} 字节');
+          }
+          if (kInfo.alreadyPatched) {
+            add('   ⚠️ 这个内核已被打过引导补丁（入口两条都是 b 指令）');
+            add('     继续操作会用新内容覆盖，原补丁会丢失');
+          } else if (kInfo.canPatch) {
+            add('   ✅ 干净内核，可以操作');
+          } else {
+            add('   ⚠️ ${kInfo.reason}');
+          }
+        }
+      }
 
       // 删除原 init
       add('');
